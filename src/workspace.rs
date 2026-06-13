@@ -124,10 +124,7 @@ pub fn parse_ws_path_for_write_in(
         validate_parent_within_workspace(&absolute, workspace_dir)?;
     }
 
-    Ok(ResolvedPath {
-        relative,
-        absolute,
-    })
+    Ok(ResolvedPath { relative, absolute })
 }
 
 fn validate_parent_within_workspace(path: &Path, workspace: &Path) -> WsResult<()> {
@@ -176,7 +173,10 @@ mod tests {
         assert_eq!(normalize_workspace_relative("a/b/c.md"), "a/b/c.md");
         assert_eq!(normalize_workspace_relative("/a/b/c.md"), "a/b/c.md");
         assert_eq!(normalize_workspace_relative("../a/b/c.md"), "a/b/c.md");
-        assert_eq!(normalize_workspace_relative("./docs/foo.txt"), "docs/foo.txt");
+        assert_eq!(
+            normalize_workspace_relative("./docs/foo.txt"),
+            "docs/foo.txt"
+        );
         assert_eq!(normalize_workspace_relative("../etc/passwd"), "etc/passwd");
         assert_eq!(normalize_workspace_relative("foo/../bar"), "bar");
     }

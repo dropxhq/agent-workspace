@@ -134,7 +134,9 @@ impl Config {
 
     pub fn metadata_suffix(&self) -> &str {
         match &self.backend {
-            BackendConfig::File { metadata_suffix, .. } => metadata_suffix,
+            BackendConfig::File {
+                metadata_suffix, ..
+            } => metadata_suffix,
             BackendConfig::Mysql { .. } => {
                 panic!("metadata_suffix is only available for file backend")
             }
@@ -224,9 +226,7 @@ fn resolve_config_path() -> WsResult<PathBuf> {
         return Ok(path);
     }
 
-    let cwd_config = env::current_dir()
-        .map_err(WsError::Io)?
-        .join("config.yaml");
+    let cwd_config = env::current_dir().map_err(WsError::Io)?.join("config.yaml");
     if !cwd_config.is_file() {
         return Err(WsError::Other(format!(
             "config not found: set AGENT_WORKSPACE_CONFIG or place config.yaml in cwd ({})",

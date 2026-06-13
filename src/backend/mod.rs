@@ -2,6 +2,7 @@ use crate::commands::ranges::LineRange;
 use crate::error::WsResult;
 use crate::meta::FileMetadata;
 
+pub mod content;
 pub mod file;
 pub mod mysql;
 pub mod path;
@@ -99,8 +100,8 @@ pub fn open_backend(config: &crate::config::Config) -> WsResult<BackendHandle> {
             user,
             password,
             database,
-        } => Ok(BackendHandle::Mysql(
-            mysql::MySqlBackend::connect(host, *port, user, password, database)?,
-        )),
+        } => Ok(BackendHandle::Mysql(mysql::MySqlBackend::connect(
+            host, *port, user, password, database,
+        )?)),
     }
 }

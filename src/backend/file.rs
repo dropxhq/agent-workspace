@@ -1,11 +1,12 @@
+use crate::error::{WsError, WsResult};
 use std::fs;
 use std::io;
-use crate::error::{WsError, WsResult};
 use walkdir::WalkDir;
 
+use crate::backend::content::filter_lines;
 use crate::backend::path::{list_scope_prefix, path_matches_scope};
 use crate::backend::{ListReport, WorkspaceBackend};
-use crate::commands::ranges::{apply_write_ranges, line_in_ranges, LineRange};
+use crate::commands::ranges::{apply_write_ranges, LineRange};
 use crate::lock::FileLock;
 use crate::meta::{build_metadata_in, sidecar_absolute_in, FileMetadata};
 use crate::workspace::{
@@ -113,11 +114,8 @@ impl WorkspaceBackend for FileBackend {
     }
 
     fn list(&self, scope: Option<&str>) -> WsResult<ListReport> {
-        let (scan_root, report_scope) = resolve_list_scope(
-            scope,
-            &self.workspace_dir,
-            &self.metadata_suffix,
-        )?;
+        let (scan_root, report_scope) =
+            resolve_list_scope(scope, &self.workspace_dir, &self.metadata_suffix)?;
         let scope_prefix = list_scope_prefix(report_scope.as_deref());
 
         let mut files = Vec::new();
@@ -201,17 +199,6 @@ impl WorkspaceBackend for FileBackend {
 
         Ok(())
     }
-}
-
-fn filter_lines(content: &str, ranges: &[LineRange]) -> String {
-    let mut filtered = String::new();
-    for (idx, line) in content.split_inclusive('\n').enumerate() {
-        let line_no = idx + 1;
-        if line_in_ranges(line_no, ranges) {
-            filtered.push_str(line);
-        }
-    }
-    filtered
 }
 
 fn resolve_list_scope(
@@ -301,9 +288,7 @@ mod tests {
     fn list_scope_and_remove_work_end_to_end() {
         let (_tmp, backend) = setup_backend();
 
-        backend
-            .write("docs/a.txt", None, "A", "agent", "")
-            .unwrap();
+        backend.write("docs/a.txt", None, "A", "agent", "").unwrap();
         backend
             .write("other/b.txt", None, "BB", "agent", "")
             .unwrap();

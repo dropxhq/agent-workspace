@@ -52,7 +52,11 @@ pub fn now_local() -> DateTime<FixedOffset> {
 }
 
 pub fn sidecar_absolute(config: &Config, data_relative: &str) -> WsResult<std::path::PathBuf> {
-    sidecar_absolute_in(config.workspace_dir(), config.metadata_suffix(), data_relative)
+    sidecar_absolute_in(
+        config.workspace_dir(),
+        config.metadata_suffix(),
+        data_relative,
+    )
 }
 
 pub fn sidecar_absolute_in(

@@ -41,7 +41,9 @@ pub fn parse_ranges(input: &str) -> WsResult<Vec<LineRange>> {
     }
 
     if ranges.is_empty() {
-        return Err(WsError::InvalidRanges("no valid ranges specified".to_string()));
+        return Err(WsError::InvalidRanges(
+            "no valid ranges specified".to_string(),
+        ));
     }
 
     ranges.sort_by_key(|r| r.start);
