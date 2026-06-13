@@ -2,6 +2,23 @@ use crate::backend::{ListReport, WorkspaceBackend};
 use crate::commands::ranges::LineRange;
 use crate::error::{WsError, WsResult};
 
+#[allow(dead_code)]
+fn map_db_err(e: sqlx::Error) -> WsError {
+    if let sqlx::Error::Database(db_err) = &e {
+        if matches!(
+            db_err.code().map(|c| c.to_string()).as_deref(),
+            Some("1205") | Some("1213")
+        ) {
+            return WsError::LockConflict(db_err.message().to_string());
+        }
+    }
+    let msg = e.to_string();
+    if msg.contains("Lock wait timeout") {
+        return WsError::LockConflict(msg);
+    }
+    WsError::Other(msg)
+}
+
 pub struct MySqlBackend;
 
 impl MySqlBackend {
