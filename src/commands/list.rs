@@ -2,21 +2,12 @@ use std::path::PathBuf;
 
 use walkdir::WalkDir;
 
-use serde::Serialize;
+pub use crate::backend::ListReport;
 
 use crate::config::Config;
 use crate::error::{WsError, WsResult};
 use crate::meta::FileMetadata;
 use crate::workspace::{data_path_from_metadata, is_metadata_path, parse_ws_path_for_write};
-
-#[derive(Debug, Serialize)]
-pub struct ListReport {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub scope: Option<String>,
-    pub file_count: usize,
-    pub total_size_bytes: u64,
-    pub files: Vec<FileMetadata>,
-}
 
 pub fn run(path: Option<&str>, json: bool, config: &Config) -> WsResult<()> {
     let report = build_report(path, config)?;
