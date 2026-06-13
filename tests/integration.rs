@@ -2,7 +2,7 @@ use std::fs;
 
 use tempfile::TempDir;
 
-use agent_workspace::config::Config;
+use agent_workspace::config::{BackendConfig, Config};
 use agent_workspace::workspace::{normalize_workspace_relative, parse_ws_path};
 
 fn setup_workspace() -> (TempDir, Config) {
@@ -11,8 +11,11 @@ fn setup_workspace() -> (TempDir, Config) {
     fs::create_dir_all(&workspace).unwrap();
 
     let config = Config {
-        workspace_dir: fs::canonicalize(&workspace).unwrap(),
-        metadata_suffix: ".meta.yaml".to_string(),
+        config_path: tmp.path().join("config.yaml"),
+        backend: BackendConfig::File {
+            workspace_dir: fs::canonicalize(&workspace).unwrap(),
+            metadata_suffix: ".meta.yaml".to_string(),
+        },
     };
 
     (tmp, config)
@@ -32,9 +35,9 @@ fn write_read_remove_lifecycle() {
     )
     .unwrap();
 
-    let data_path = config.workspace_dir.join("docs/foo.txt");
+    let data_path = config.workspace_dir().join("docs/foo.txt");
     assert!(data_path.is_file());
-    assert!(config.workspace_dir.join("docs/foo.txt.meta.yaml").is_file());
+    assert!(config.workspace_dir().join("docs/foo.txt.meta.yaml").is_file());
 
     agent_workspace::commands::read::run(
         "docs/foo.txt",
@@ -49,7 +52,7 @@ fn write_read_remove_lifecycle() {
     agent_workspace::commands::remove::run("docs/foo.txt", &config)
         .unwrap();
     assert!(!data_path.exists());
-    assert!(!config.workspace_dir.join("docs/foo.txt.meta.yaml").exists());
+    assert!(!config.workspace_dir().join("docs/foo.txt.meta.yaml").exists());
 }
 
 #[test]
@@ -76,7 +79,7 @@ fn write_with_ranges_partial_replace() {
     )
     .unwrap();
 
-    let content = fs::read_to_string(config.workspace_dir.join("partial.txt")).unwrap();
+    let content = fs::read_to_string(config.workspace_dir().join("partial.txt")).unwrap();
     assert_eq!(content, "a\nB\nc\n");
 }
 
@@ -86,7 +89,7 @@ fn metadata_path_hidden_from_read_and_remove() {
 
     let meta_relative = "secret.txt.meta.yaml";
     fs::write(
-        config.workspace_dir.join(meta_relative),
+        config.workspace_dir().join(meta_relative),
         "relative_path: secret.txt\n",
     )
     .unwrap();
@@ -146,8 +149,11 @@ fn symlink_escape_blocked() {
         symlink(&outside, &link_path).unwrap();
 
         let config = Config {
-            workspace_dir: fs::canonicalize(&workspace).unwrap(),
-            metadata_suffix: ".meta.yaml".to_string(),
+            config_path: tmp.path().join("config.yaml"),
+            backend: BackendConfig::File {
+                workspace_dir: fs::canonicalize(&workspace).unwrap(),
+                metadata_suffix: ".meta.yaml".to_string(),
+            },
         };
 
         let resolved =
@@ -174,7 +180,7 @@ fn metadata_preserves_created_fields_on_update() {
     .unwrap();
 
     let meta1 = agent_workspace::meta::FileMetadata::read_from_sidecar(
-        &config.workspace_dir.join("keep.txt.meta.yaml"),
+        &config.workspace_dir().join("keep.txt.meta.yaml"),
     )
     .unwrap();
 
@@ -191,7 +197,7 @@ fn metadata_preserves_created_fields_on_update() {
     .unwrap();
 
     let meta2 = agent_workspace::meta::FileMetadata::read_from_sidecar(
-        &config.workspace_dir.join("keep.txt.meta.yaml"),
+        &config.workspace_dir().join("keep.txt.meta.yaml"),
     )
     .unwrap();
 
@@ -306,12 +312,12 @@ fn concurrent_writes_do_not_corrupt() {
         h.join().unwrap();
     }
 
-    let content = fs::read_to_string(config.workspace_dir.join("concurrent.txt")).unwrap();
+    let content = fs::read_to_string(config.workspace_dir().join("concurrent.txt")).unwrap();
     assert!(content.starts_with("iteration "));
     assert!(content.ends_with('\n'));
 
     let meta = agent_workspace::meta::FileMetadata::read_from_sidecar(
-        &config.workspace_dir.join("concurrent.txt.meta.yaml"),
+        &config.workspace_dir().join("concurrent.txt.meta.yaml"),
     )
     .unwrap();
     assert_eq!(meta.size_bytes, content.len() as u64);

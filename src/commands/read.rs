@@ -15,7 +15,7 @@ pub fn run(
 ) -> WsResult<()> {
     let resolved = parse_ws_path(path, config)?;
 
-    if is_metadata_path(&resolved.relative, &config.metadata_suffix) {
+    if is_metadata_path(&resolved.relative, config.metadata_suffix()) {
         return Err(WsError::NotFound(resolved.relative));
     }
 

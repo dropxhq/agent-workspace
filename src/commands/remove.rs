@@ -9,7 +9,7 @@ use crate::workspace::{is_metadata_path, parse_ws_path};
 pub fn run(path: &str, config: &Config) -> WsResult<()> {
     let resolved = parse_ws_path(path, config)?;
 
-    if is_metadata_path(&resolved.relative, &config.metadata_suffix) {
+    if is_metadata_path(&resolved.relative, config.metadata_suffix()) {
         return Err(WsError::NotFound(resolved.relative));
     }
 

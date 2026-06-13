@@ -49,16 +49,16 @@ pub fn build_report(path: Option<&str>, config: &Config) -> WsResult<ListReport>
         }
 
         let file_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
-        if !file_name.ends_with(&config.metadata_suffix) {
+        if !file_name.ends_with(config.metadata_suffix()) {
             continue;
         }
 
         let rel = path
-            .strip_prefix(&config.workspace_dir)
+            .strip_prefix(config.workspace_dir())
             .map_err(|e| WsError::Other(e.to_string()))?;
         let rel_str = rel.to_string_lossy().replace('\\', "/");
 
-        if data_path_from_metadata(&rel_str, &config.metadata_suffix).is_none() {
+        if data_path_from_metadata(&rel_str, config.metadata_suffix()).is_none() {
             continue;
         }
 
@@ -86,19 +86,19 @@ pub fn build_report(path: Option<&str>, config: &Config) -> WsResult<ListReport>
 
 fn resolve_list_scope(path: Option<&str>, config: &Config) -> WsResult<(PathBuf, Option<String>)> {
     let Some(path) = path else {
-        return Ok((config.workspace_dir.clone(), None));
+        return Ok((config.workspace_dir().clone(), None));
     };
 
     let resolved = parse_ws_path_for_write(path, config)?;
 
-    if is_metadata_path(&resolved.relative, &config.metadata_suffix) {
+    if is_metadata_path(&resolved.relative, config.metadata_suffix()) {
         return Err(WsError::NotFound(resolved.relative));
     }
 
     let prefix = resolved.relative;
 
     if prefix.is_empty() {
-        return Ok((config.workspace_dir.clone(), None));
+        return Ok((config.workspace_dir().clone(), None));
     }
 
     let dir = resolved.absolute;

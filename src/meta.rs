@@ -52,7 +52,7 @@ pub fn now_local() -> DateTime<FixedOffset> {
 }
 
 pub fn sidecar_absolute(config: &Config, data_relative: &str) -> WsResult<std::path::PathBuf> {
-    let meta_relative = metadata_path_for(data_relative, &config.metadata_suffix);
+    let meta_relative = metadata_path_for(data_relative, config.metadata_suffix());
     Ok(resolve_relative(&meta_relative, config)?.absolute)
 }
 

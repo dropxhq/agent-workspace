@@ -34,8 +34,8 @@ pub fn normalize_workspace_relative(path: &str) -> String {
 }
 
 pub fn resolve_relative(relative: &str, config: &Config) -> WsResult<ResolvedPath> {
-    let absolute = config.workspace_dir.join(relative);
-    validate_within_workspace(&absolute, &config.workspace_dir)?;
+    let absolute = config.workspace_dir().join(relative);
+    validate_within_workspace(&absolute, config.workspace_dir())?;
 
     Ok(ResolvedPath {
         relative: relative.to_string(),
@@ -95,16 +95,16 @@ pub fn data_path_from_metadata(relative: &str, metadata_suffix: &str) -> Option<
 pub fn parse_ws_path_for_write(input: &str, config: &Config) -> WsResult<ResolvedPath> {
     let relative = normalize_workspace_relative(input);
 
-    if is_metadata_path(&relative, &config.metadata_suffix) {
+    if is_metadata_path(&relative, config.metadata_suffix()) {
         return Err(WsError::NotFound(relative));
     }
 
-    let absolute = config.workspace_dir.join(&relative);
+    let absolute = config.workspace_dir().join(&relative);
 
     if absolute.exists() {
-        validate_within_workspace(&absolute, &config.workspace_dir)?;
+        validate_within_workspace(&absolute, config.workspace_dir())?;
     } else {
-        validate_parent_within_workspace(&absolute, &config.workspace_dir)?;
+        validate_parent_within_workspace(&absolute, config.workspace_dir())?;
     }
 
     Ok(ResolvedPath {
