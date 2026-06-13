@@ -2,12 +2,16 @@ use std::process;
 
 use clap::{Parser, Subcommand};
 
+use agent_workspace::backend::{open_backend, BackendHandle};
 use agent_workspace::commands;
 use agent_workspace::config::Config;
 use agent_workspace::error::WsError;
 
 #[derive(Parser)]
-#[command(name = "ws", about = "Agent workspace file operations (restricted to configured workspace)")]
+#[command(
+    name = "ws",
+    about = "Agent workspace file operations (restricted to configured workspace)"
+)]
 struct Cli {
     #[command(subcommand)]
     command: Commands,
@@ -77,24 +81,20 @@ fn run() -> Result<(), WsError> {
         Commands::Init { path } => commands::init::run(path.as_deref()),
         command => {
             let config = Config::load()?;
-            dispatch(command, &config)
+            let backend = open_backend(&config)?;
+            dispatch(command, &backend)
         }
     }
 }
 
-fn dispatch(command: Commands, config: &Config) -> Result<(), WsError> {
+fn dispatch(command: Commands, backend: &BackendHandle) -> Result<(), WsError> {
     match command {
         Commands::Init { .. } => unreachable!(),
         Commands::Read {
             path,
             ranges,
             human,
-        } => commands::read::run(
-            &path,
-            ranges.as_deref(),
-            human,
-            &config,
-        )?,
+        } => commands::read::run(&path, ranges.as_deref(), human, backend)?,
         Commands::Write {
             path,
             ranges,
@@ -107,10 +107,10 @@ fn dispatch(command: Commands, config: &Config) -> Result<(), WsError> {
             created_by.as_deref().unwrap_or(""),
             desc.as_deref().unwrap_or(""),
             content.as_deref(),
-            &config,
+            backend,
         )?,
-        Commands::List { path, json } => commands::list::run(path.as_deref(), json, &config)?,
-        Commands::Remove { path } => commands::remove::run(&path, config)?,
+        Commands::List { path, json } => commands::list::run(path.as_deref(), json, backend)?,
+        Commands::Remove { path } => commands::remove::run(&path, backend)?,
     }
 
     Ok(())

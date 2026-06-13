@@ -1,12 +1,8 @@
-use std::fs;
 use std::io::{self, Read};
 
-use crate::commands::ranges::{apply_write_ranges, parse_ranges, LineRange};
-use crate::config::Config;
+use crate::backend::{BackendHandle, WorkspaceBackend};
+use crate::commands::ranges::{parse_ranges, LineRange};
 use crate::error::{WsError, WsResult};
-use crate::lock::FileLock;
-use crate::meta::{build_metadata, sidecar_absolute};
-use crate::workspace::parse_ws_path_for_write;
 
 pub fn run(
     path: &str,
@@ -14,10 +10,8 @@ pub fn run(
     created_by: &str,
     desc: &str,
     content_arg: Option<&str>,
-    config: &Config,
+    backend: &BackendHandle,
 ) -> WsResult<()> {
-    let resolved = parse_ws_path_for_write(path, config)?;
-
     let new_content = read_input(content_arg)?;
 
     let parsed_range = ranges.map(parse_ranges).transpose()?.and_then(|mut v| {
@@ -34,38 +28,7 @@ pub fn run(
     }
     let parsed_range: Option<LineRange> = parsed_range.transpose()?;
 
-    let _lock = FileLock::exclusive(&resolved.absolute)?;
-
-    let final_content = if let Some(range) = &parsed_range {
-        let existing = if resolved.absolute.is_file() {
-            fs::read_to_string(&resolved.absolute).map_err(WsError::Io)?
-        } else {
-            String::new()
-        };
-        apply_write_ranges(&existing, range, &new_content)
-    } else {
-        new_content
-    };
-
-    if let Some(parent) = resolved.absolute.parent() {
-        fs::create_dir_all(parent).map_err(WsError::Io)?;
-    }
-
-    fs::write(&resolved.absolute, &final_content).map_err(WsError::Io)?;
-
-    let metadata = build_metadata(
-        config,
-        &resolved.relative,
-        final_content.as_bytes(),
-        created_by,
-        desc,
-    )?;
-
-    let sidecar = sidecar_absolute(config, &resolved.relative)?;
-    if let Some(parent) = sidecar.parent() {
-        fs::create_dir_all(parent).map_err(WsError::Io)?;
-    }
-    metadata.write_to_sidecar(&sidecar)?;
+    backend.write(path, parsed_range.as_ref(), &new_content, created_by, desc)?;
 
     Ok(())
 }
@@ -76,9 +39,7 @@ fn read_input(content_arg: Option<&str>) -> WsResult<String> {
     }
 
     let mut buf = String::new();
-    io::stdin()
-        .read_to_string(&mut buf)
-        .map_err(WsError::Io)?;
+    io::stdin().read_to_string(&mut buf).map_err(WsError::Io)?;
     Ok(buf)
 }
 
