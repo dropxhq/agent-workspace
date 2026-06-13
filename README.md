@@ -4,9 +4,10 @@
 
 ## 特性
 
-- **路径隔离**：读写操作限制在 `workspace_dir` 内，含符号链接逃逸检测
-- **元数据 sidecar**：每个文件自动维护 `*.meta.yaml`（创建者、描述、时间戳、SHA256）
-- **并发安全**：`read` 使用共享锁，`write` / `remove` 使用独占锁
+- **双后端**：本地文件（`file`）或 MySQL（`mysql`），通过 `config.yaml` 切换
+- **路径隔离**（file 后端）：读写操作限制在 `workspace_dir` 内，含符号链接逃逸检测
+- **元数据**：file 后端使用 `*.meta.yaml` sidecar；mysql 后端将元数据存入数据库
+- **并发安全**：file 后端使用 advisory 文件锁；mysql 后端使用 InnoDB 行锁
 - **按行操作**：支持按行区间读取或局部替换写入
 
 ## 安装
@@ -25,34 +26,60 @@ cargo install --path .
 
 ## 初始化
 
-使用 `init` 命令创建新的工作区（生成 `config.yaml` 和 `data/` 目录）：
+使用 `init` 命令创建新的工作区（生成 `config.yaml`，file 后端还会创建 `data/` 目录）：
 
 ```bash
-# 在当前目录初始化
+# 在当前目录初始化（默认 file 后端）
 ws init
 
 # 在指定目录初始化（不存在则自动创建）
 ws init ./my-agent-workspace
 ws init /path/to/workspace
+
+# 使用 MySQL 后端（生成 mysql 配置模板并自动建库建表）
+ws init --backend mysql
+ws init ./my-agent-workspace --backend mysql
 ```
+
+`--backend mysql` 会写入 MySQL 连接配置模板，并尝试连接数据库、创建库（若不存在）及 `workspace_files` 表。请编辑 `config.yaml` 中的 `host`、`user`、`password`、`database` 后再使用其他命令。
 
 初始化完成后，进入该目录即可使用其他命令。若目录下已存在 `config.yaml`，会报错以避免覆盖。
 
 ## 配置
 
-在项目根目录（或任意启动目录）放置 `config.yaml`：
+> **破坏性变更**：旧版顶层 `workspace_dir` / `metadata_suffix` 已移除。请改用 `backend` 块，见下方示例。
+
+在项目根目录（或任意启动目录）放置 `config.yaml`。
+
+### File 后端（默认）
 
 ```yaml
-workspace_dir: ./data         # 工作目录，相对 config 文件所在目录解析
-metadata_suffix: ".meta.yaml" # 元数据后缀，可省略（默认值）
+backend:
+  type: file
+  workspace_dir: ./data         # 相对 config 文件所在目录解析
+  metadata_suffix: ".meta.yaml" # 可省略（默认值）
 ```
 
-加载顺序：
+启动时会校验 `workspace_dir` 存在且可写。
+
+### MySQL 后端
+
+```yaml
+backend:
+  type: mysql
+  host: localhost
+  port: 3306                    # 可省略（默认 3306）
+  user: ws_user
+  password: change_me
+  database: agent_workspace
+```
+
+连接时会自动确保数据库和 `workspace_files` 表存在。元数据（创建者、描述、时间戳、SHA256）与文件内容存储在同一张表中，不再使用 sidecar 文件。
+
+### 加载顺序
 
 1. 若设置了环境变量 `AGENT_WORKSPACE_CONFIG`，使用其指向的配置文件
 2. 否则读取**当前工作目录**下的 `config.yaml`
-
-启动时会校验 `workspace_dir` 存在且可写。本仓库默认工作目录为 `./data/`。
 
 ## 路径规则
 
@@ -77,11 +104,14 @@ metadata_suffix: ".meta.yaml" # 元数据后缀，可省略（默认值）
 ```bash
 ws init
 ws init ./my-agent-workspace
+ws init --backend mysql
+ws init ./my-agent-workspace --backend mysql
 ```
 
 | 参数 | 说明 |
 |------|------|
 | `[path]` | 可选，目标目录；省略则在当前工作目录初始化 |
+| `--backend` | 后端类型：`file`（默认）或 `mysql` |
 
 ### `read` — 读取文件
 
@@ -172,14 +202,31 @@ sha256: "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
 
 ## 并发说明
 
-文件锁为进程级 advisory lock，仅对同样使用本工具的进程有效。同一文件的并发 `write` 会串行化；`write` 在独占锁下同时更新数据文件和元数据，保证一致性。
+### File 后端
+
+文件锁为进程级 advisory lock，仅对同样使用本工具的进程有效。同一文件的并发 `write` 会串行化；`write` 在独占锁下同时更新数据文件和元数据 sidecar，保证一致性。
+
+### MySQL 后端
+
+`write` / `remove` 在事务内对目标行执行 `SELECT ... FOR UPDATE`，依赖 InnoDB 行锁串行化并发写入。锁等待超时或死锁时返回退出码 **4**（`LockConflict`），与 file 后端的锁冲突行为一致。`read` 为普通 SELECT，不加行锁。
 
 ## 开发
 
 ```bash
-cargo test          # 单元测试 + 集成测试
+cargo test          # 单元测试 + 集成测试（不含需 MySQL 的 ignored 测试）
 cargo run -- list   # 开发模式运行
 ```
+
+### MySQL 集成测试（可选）
+
+需要本地或 CI 中可访问的 MySQL 实例。设置 `MYSQL_TEST_URL` 后运行 ignored 测试：
+
+```bash
+export MYSQL_TEST_URL='mysql://user:pass@localhost:3306/agent_workspace_test'
+cargo test --test mysql_integration -- --ignored
+```
+
+未设置 `MYSQL_TEST_URL` 时，`cargo test` 会跳过这些测试，不影响常规 CI。
 
 ## 快速上手
 
