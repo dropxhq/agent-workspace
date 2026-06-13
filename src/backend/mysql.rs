@@ -49,6 +49,34 @@ pub struct MySqlBackend {
 }
 
 impl MySqlBackend {
+    pub fn ensure_schema(
+        host: &str,
+        port: u16,
+        user: &str,
+        password: &str,
+        database: &str,
+    ) -> WsResult<()> {
+        let runtime = Runtime::new()
+            .map_err(|e| WsError::Other(format!("failed to create tokio runtime: {e}")))?;
+
+        let base_options = MySqlConnectOptions::new()
+            .host(host)
+            .port(port)
+            .username(user)
+            .password(password);
+        let admin_pool = MySqlPoolOptions::new()
+            .max_connections(2)
+            .connect_lazy_with(base_options);
+
+        runtime.block_on(async {
+            sqlx::query("SELECT 1")
+                .execute(&admin_pool)
+                .await
+                .map_err(map_db_err)?;
+            Self::ensure_schema_with_pool(&admin_pool, database).await
+        })
+    }
+
     pub fn connect(
         host: &str,
         port: u16,
@@ -79,7 +107,7 @@ impl MySqlBackend {
                 .execute(&admin_pool)
                 .await
                 .map_err(map_db_err)?;
-            Self::ensure_schema(&admin_pool, database).await?;
+            Self::ensure_schema_with_pool(&admin_pool, database).await?;
             Ok(())
         })?;
 
@@ -113,7 +141,7 @@ impl MySqlBackend {
         runtime.block_on(future)
     }
 
-    async fn ensure_schema(pool: &MySqlPool, database: &str) -> WsResult<()> {
+    async fn ensure_schema_with_pool(pool: &MySqlPool, database: &str) -> WsResult<()> {
         let database_ident = quote_mysql_identifier(database)?;
         sqlx::query(&format!("CREATE DATABASE IF NOT EXISTS {database_ident}"))
             .execute(pool)

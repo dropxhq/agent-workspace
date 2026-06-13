@@ -266,11 +266,12 @@ fn init_creates_workspace_layout() {
     let tmp = TempDir::new().unwrap();
     let target = tmp.path().join("new-ws");
 
-    agent_workspace::commands::init::run(Some(target.to_str().unwrap())).unwrap();
+    agent_workspace::commands::init::run(Some(target.to_str().unwrap()), "file").unwrap();
 
     assert!(target.join("config.yaml").is_file());
     assert!(target.join("data").is_dir());
 
-    let err = agent_workspace::commands::init::run(Some(target.to_str().unwrap())).unwrap_err();
+    let err =
+        agent_workspace::commands::init::run(Some(target.to_str().unwrap()), "file").unwrap_err();
     assert!(matches!(err, agent_workspace::error::WsError::Other(_)));
 }

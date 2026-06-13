@@ -19,10 +19,13 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Initialize a new workspace (config.yaml + data directory)
+    /// Initialize a new workspace (config.yaml + backend layout)
     Init {
         /// Target directory (defaults to current working directory)
         path: Option<String>,
+        /// Backend type: file or mysql
+        #[arg(long, default_value = "file")]
+        backend: String,
     },
     /// Read a file from the workspace
     Read {
@@ -78,7 +81,7 @@ fn run() -> Result<(), WsError> {
     let cli = Cli::parse();
 
     match cli.command {
-        Commands::Init { path } => commands::init::run(path.as_deref()),
+        Commands::Init { path, backend } => commands::init::run(path.as_deref(), &backend),
         command => {
             let config = Config::load()?;
             let backend = open_backend(&config)?;
