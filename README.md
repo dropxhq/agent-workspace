@@ -217,6 +217,39 @@ cargo test          # 单元测试 + 集成测试（不含需 MySQL 的 ignored 
 cargo run -- list   # 开发模式运行
 ```
 
+### 项目结构
+
+源码按**领域/特性**组织，每个概念对应一个清晰位置：
+
+```
+src/
+├── main.rs       仅 fn main()，调用 cli::run()
+├── lib.rs        模块声明
+├── error.rs      错误类型与退出码
+├── lock.rs       file 后端的 advisory 文件锁
+├── cli.rs        Cli/Commands 定义、命令分发、按作用域打开后端
+├── scoping.rs    SessionScope（user/session 作用域解析）
+├── ranges.rs     行区间解析、写入替换、过滤
+├── metadata.rs   FileMetadata、sidecar 读写、SHA256/时间戳
+├── paths/        路径领域
+│   ├── normalize.rs     工作区相对路径归一化
+│   ├── resolve.rs       路径解析与越界校验
+│   ├── metadata_name.rs sidecar 命名与识别
+│   └── scope_prefix.rs  list 作用域前缀匹配
+├── config/       配置领域
+│   ├── mod.rs       Config / BackendConfig
+│   ├── raw.rs       反序列化 DTO 与默认值
+│   ├── load.rs      配置发现、加载、校验
+│   └── templates.rs init 写出的配置模板
+├── storage/      存储领域
+│   ├── mod.rs       WorkspaceBackend trait + ListReport
+│   ├── handle.rs    BackendHandle 枚举与工厂
+│   ├── file.rs      file 后端
+│   ├── scoped.rs    带作用域的 mysql 后端包装
+│   └── mysql/       mysql 后端（connection 连接层 + mod CRUD 实现）
+└── commands/     各子命令实现（init/read/write/list/remove）
+```
+
 ### MySQL 集成测试（可选）
 
 需要本地或 CI 中可访问的 MySQL 实例。设置 `MYSQL_TEST_URL` 后运行 ignored 测试：
