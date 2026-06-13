@@ -1,12 +1,4 @@
-use crate::workspace::normalize_workspace_relative;
-
-pub fn normalize_input_path(input: &str) -> String {
-    normalize_workspace_relative(input)
-}
-
-pub fn is_metadata_path(relative: &str, metadata_suffix: &str) -> bool {
-    relative.ends_with(metadata_suffix)
-}
+use crate::paths::normalize_workspace_relative;
 
 /// `docs` -> `docs/`, `docs/` -> `docs/`, `""` -> None (whole workspace)
 pub fn list_scope_prefix(scope: Option<&str>) -> Option<String> {

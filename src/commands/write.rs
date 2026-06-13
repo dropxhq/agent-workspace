@@ -1,7 +1,7 @@
 use std::io::{self, Read};
 
-use crate::backend::{BackendHandle, WorkspaceBackend};
-use crate::commands::ranges::{parse_ranges, LineRange};
+use crate::storage::{BackendHandle, WorkspaceBackend};
+use crate::ranges::{parse_ranges, LineRange};
 use crate::error::{WsError, WsResult};
 
 pub fn run(
@@ -45,7 +45,7 @@ fn read_input(content_arg: Option<&str>) -> WsResult<String> {
 
 #[cfg(test)]
 mod tests {
-    use crate::commands::ranges::{apply_write_ranges, LineRange};
+    use crate::ranges::{apply_write_ranges, LineRange};
 
     #[test]
     fn write_range_semantics() {

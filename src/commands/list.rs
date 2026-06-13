@@ -1,6 +1,6 @@
-pub use crate::backend::ListReport;
+pub use crate::storage::ListReport;
 
-use crate::backend::{BackendHandle, WorkspaceBackend};
+use crate::storage::{BackendHandle, WorkspaceBackend};
 use crate::error::{WsError, WsResult};
 pub fn run(path: Option<&str>, json: bool, backend: &BackendHandle) -> WsResult<()> {
     let report = backend.list(path)?;

@@ -2,9 +2,12 @@ use std::fs;
 
 use tempfile::TempDir;
 
-use agent_workspace::backend::{file::FileBackend, open_scoped_backend, BackendHandle, WorkspaceBackend};
 use agent_workspace::config::Config;
-use agent_workspace::workspace::{normalize_workspace_relative, parse_ws_path_in, SessionScope};
+use agent_workspace::paths::{normalize_workspace_relative, parse_ws_path_in};
+use agent_workspace::scoping::SessionScope;
+use agent_workspace::storage::{
+    file::FileBackend, open_scoped_backend, BackendHandle, WorkspaceBackend,
+};
 
 fn setup_workspace() -> (TempDir, std::path::PathBuf, BackendHandle) {
     let tmp = TempDir::new().unwrap();
@@ -150,7 +153,7 @@ fn metadata_preserves_created_fields_on_update() {
     )
     .unwrap();
 
-    let meta1 = agent_workspace::meta::FileMetadata::read_from_sidecar(
+    let meta1 = agent_workspace::metadata::FileMetadata::read_from_sidecar(
         &workspace_dir.join("keep.txt.meta.yaml"),
     )
     .unwrap();
@@ -167,7 +170,7 @@ fn metadata_preserves_created_fields_on_update() {
     )
     .unwrap();
 
-    let meta2 = agent_workspace::meta::FileMetadata::read_from_sidecar(
+    let meta2 = agent_workspace::metadata::FileMetadata::read_from_sidecar(
         &workspace_dir.join("keep.txt.meta.yaml"),
     )
     .unwrap();
@@ -255,7 +258,7 @@ fn concurrent_writes_do_not_corrupt() {
     assert!(content.starts_with("iteration "));
     assert!(content.ends_with('\n'));
 
-    let meta = agent_workspace::meta::FileMetadata::read_from_sidecar(
+    let meta = agent_workspace::metadata::FileMetadata::read_from_sidecar(
         &workspace_dir.join("concurrent.txt.meta.yaml"),
     )
     .unwrap();

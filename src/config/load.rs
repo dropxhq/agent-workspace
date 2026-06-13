@@ -2,85 +2,9 @@ use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use serde::Deserialize;
-
+use crate::config::raw::{RawBackend, RawBackendInner, RawFileBackend, RawMysqlBackend};
+use crate::config::{BackendConfig, Config};
 use crate::error::{WsError, WsResult};
-
-const DEFAULT_METADATA_SUFFIX: &str = ".meta.yaml";
-const DEFAULT_MYSQL_PORT: u16 = 3306;
-
-#[derive(Debug, Clone)]
-pub struct Config {
-    pub config_path: PathBuf,
-    pub backend: BackendConfig,
-}
-
-#[derive(Debug, Clone)]
-pub enum BackendConfig {
-    File {
-        workspace_dir: PathBuf,
-        metadata_suffix: String,
-    },
-    Mysql {
-        host: String,
-        port: u16,
-        user: String,
-        password: String,
-        database: String,
-    },
-}
-
-fn default_metadata_suffix() -> String {
-    DEFAULT_METADATA_SUFFIX.to_string()
-}
-
-fn default_mysql_port() -> u16 {
-    DEFAULT_MYSQL_PORT
-}
-
-#[derive(Debug, Deserialize)]
-struct RawFileBackend {
-    #[serde(default = "default_type_file")]
-    r#type: String,
-    workspace_dir: PathBuf,
-    #[serde(default = "default_metadata_suffix")]
-    metadata_suffix: String,
-}
-
-fn default_type_file() -> String {
-    "file".to_string()
-}
-
-#[derive(Debug, Deserialize)]
-struct RawMysqlBackend {
-    #[serde(default = "default_type_mysql")]
-    r#type: String,
-    host: String,
-    #[serde(default = "default_mysql_port")]
-    port: u16,
-    user: String,
-    password: String,
-    database: String,
-}
-
-fn default_type_mysql() -> String {
-    "mysql".to_string()
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(untagged)]
-enum RawBackend {
-    Wrapped { backend: RawBackendInner },
-    File(RawFileBackend),
-    Mysql(RawMysqlBackend),
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(untagged)]
-enum RawBackendInner {
-    File(RawFileBackend),
-    Mysql(RawMysqlBackend),
-}
 
 impl Config {
     pub fn load() -> WsResult<Self> {
@@ -121,26 +45,6 @@ impl Config {
             config_path: config_path.to_path_buf(),
             backend,
         })
-    }
-
-    pub fn workspace_dir(&self) -> &PathBuf {
-        match &self.backend {
-            BackendConfig::File { workspace_dir, .. } => workspace_dir,
-            BackendConfig::Mysql { .. } => {
-                panic!("workspace_dir is only available for file backend")
-            }
-        }
-    }
-
-    pub fn metadata_suffix(&self) -> &str {
-        match &self.backend {
-            BackendConfig::File {
-                metadata_suffix, ..
-            } => metadata_suffix,
-            BackendConfig::Mysql { .. } => {
-                panic!("metadata_suffix is only available for file backend")
-            }
-        }
     }
 }
 

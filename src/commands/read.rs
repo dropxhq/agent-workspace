@@ -1,7 +1,7 @@
 use std::io::{self, Write};
 
-use crate::backend::{BackendHandle, WorkspaceBackend};
-use crate::commands::ranges::{line_in_ranges, parse_ranges};
+use crate::storage::{BackendHandle, WorkspaceBackend};
+use crate::ranges::{line_in_ranges, parse_ranges};
 use crate::error::{WsError, WsResult};
 
 pub fn run(path: &str, ranges: Option<&str>, human: bool, backend: &BackendHandle) -> WsResult<()> {
@@ -22,7 +22,7 @@ pub fn run(path: &str, ranges: Option<&str>, human: bool, backend: &BackendHandl
 fn print_human(
     relative: &str,
     content: &str,
-    ranges: Option<&[crate::commands::ranges::LineRange]>,
+    ranges: Option<&[crate::ranges::LineRange]>,
 ) -> WsResult<()> {
     let mut stdout = io::stdout().lock();
     writeln!(stdout, "{relative}").map_err(WsError::Io)?;
@@ -43,7 +43,7 @@ fn print_human(
 
 fn print_raw_filtered(
     content: &str,
-    ranges: &[crate::commands::ranges::LineRange],
+    ranges: &[crate::ranges::LineRange],
 ) -> WsResult<()> {
     let mut stdout = io::stdout().lock();
     for (idx, line) in content.split_inclusive('\n').enumerate() {

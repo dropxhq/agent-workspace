@@ -3,24 +3,10 @@ use std::fs;
 use std::path::PathBuf;
 
 #[cfg(not(test))]
-use crate::backend::mysql::MySqlBackend;
+use crate::storage::mysql::MySqlBackend;
+use crate::config::templates::{DEFAULT_FILE_CONFIG, DEFAULT_MYSQL_CONFIG};
 use crate::config::{BackendConfig, Config};
 use crate::error::{WsError, WsResult};
-
-const DEFAULT_FILE_CONFIG: &str = r#"backend:
-  type: file
-  workspace_dir: ./data
-  metadata_suffix: ".meta.yaml"
-"#;
-
-const DEFAULT_MYSQL_CONFIG: &str = r#"backend:
-  type: mysql
-  host: localhost
-  port: 3306
-  user: ws_user
-  password: change_me
-  database: agent_workspace
-"#;
 
 pub fn run(target: Option<&str>, backend: &str) -> WsResult<()> {
     let base = resolve_target_dir(target)?;

@@ -7,7 +7,7 @@ use sha2::{Digest, Sha256};
 
 use crate::config::Config;
 use crate::error::{WsError, WsResult};
-use crate::workspace::{metadata_path_for, resolve_relative_in};
+use crate::paths::{metadata_path_for, resolve_relative_in};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct FileMetadata {

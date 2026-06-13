@@ -1,7 +1,10 @@
-pub mod backend;
+pub mod cli;
 pub mod commands;
 pub mod config;
 pub mod error;
 pub mod lock;
-pub mod meta;
-pub mod workspace;
+pub mod metadata;
+pub mod paths;
+pub mod ranges;
+pub mod scoping;
+pub mod storage;

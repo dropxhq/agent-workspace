@@ -12,8 +12,8 @@
 use std::env;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use agent_workspace::backend::mysql::MySqlBackend;
-use agent_workspace::backend::{BackendHandle, WorkspaceBackend};
+use agent_workspace::storage::mysql::MySqlBackend;
+use agent_workspace::storage::{BackendHandle, WorkspaceBackend};
 
 struct MysqlTestConfig {
     host: String,

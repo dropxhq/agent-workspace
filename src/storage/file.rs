@@ -3,15 +3,14 @@ use std::fs;
 use std::io;
 use walkdir::WalkDir;
 
-use crate::backend::content::filter_lines;
-use crate::backend::path::{list_scope_prefix, path_matches_scope};
-use crate::backend::{ListReport, WorkspaceBackend};
-use crate::commands::ranges::{apply_write_ranges, LineRange};
+use crate::storage::{ListReport, WorkspaceBackend};
 use crate::lock::FileLock;
-use crate::meta::{build_metadata_in, sidecar_absolute_in, FileMetadata};
-use crate::workspace::{
-    data_path_from_metadata, is_metadata_path, parse_ws_path_for_write_in, parse_ws_path_in,
+use crate::metadata::{build_metadata_in, sidecar_absolute_in, FileMetadata};
+use crate::paths::{
+    data_path_from_metadata, is_metadata_path, list_scope_prefix, parse_ws_path_for_write_in,
+    parse_ws_path_in, path_matches_scope,
 };
+use crate::ranges::{apply_write_ranges, filter_lines, LineRange};
 use std::path::PathBuf;
 
 pub struct FileBackend {
@@ -32,7 +31,7 @@ impl WorkspaceBackend for FileBackend {
     fn read(
         &self,
         path: &str,
-        ranges: Option<&[crate::commands::ranges::LineRange]>,
+        ranges: Option<&[crate::ranges::LineRange]>,
     ) -> WsResult<String> {
         let resolved = parse_ws_path_in(&self.workspace_dir, path)?;
 

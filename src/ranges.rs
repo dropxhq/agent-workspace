@@ -84,6 +84,17 @@ pub fn apply_write_ranges(existing: &str, ranges: &LineRange, new_content: &str)
     result
 }
 
+pub fn filter_lines(content: &str, ranges: &[LineRange]) -> String {
+    let mut filtered = String::new();
+    for (idx, line) in content.split_inclusive('\n').enumerate() {
+        let line_no = idx + 1;
+        if line_in_ranges(line_no, ranges) {
+            filtered.push_str(line);
+        }
+    }
+    filtered
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -123,5 +134,12 @@ mod tests {
         let ranges = LineRange { start: 1, end: 3 };
         let result = apply_write_ranges(existing, &ranges, "x\n");
         assert_eq!(result, "x\n");
+    }
+
+    #[test]
+    fn filters_only_requested_ranges() {
+        let content = "one\ntwo\nthree\n";
+        let ranges = [LineRange { start: 2, end: 3 }];
+        assert_eq!(filter_lines(content, &ranges), "two\nthree\n");
     }
 }

@@ -1,45 +1,9 @@
-use crate::commands::ranges::LineRange;
-use crate::error::WsResult;
 use std::fs;
-use crate::meta::FileMetadata;
 
-pub mod content;
-pub mod file;
-pub mod mysql;
-pub mod path;
-pub mod scoped;
-
-use serde::Serialize;
-
-#[derive(Debug, Serialize)]
-pub struct ListReport {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub scope: Option<String>,
-    pub file_count: usize,
-    pub total_size_bytes: u64,
-    pub files: Vec<FileMetadata>,
-}
-
-pub trait WorkspaceBackend {
-    fn read(
-        &self,
-        path: &str,
-        ranges: Option<&[crate::commands::ranges::LineRange]>,
-    ) -> WsResult<String>;
-
-    fn write(
-        &self,
-        path: &str,
-        ranges: Option<&LineRange>,
-        content: &str,
-        created_by: &str,
-        desc: &str,
-    ) -> WsResult<()>;
-
-    fn list(&self, scope: Option<&str>) -> WsResult<ListReport>;
-
-    fn remove(&self, path: &str) -> WsResult<()>;
-}
+use crate::error::WsResult;
+use crate::ranges::LineRange;
+use crate::scoping::SessionScope;
+use crate::storage::{file, mysql, scoped, ListReport, WorkspaceBackend};
 
 pub enum BackendHandle {
     File(file::FileBackend),
@@ -48,11 +12,7 @@ pub enum BackendHandle {
 }
 
 impl WorkspaceBackend for BackendHandle {
-    fn read(
-        &self,
-        path: &str,
-        ranges: Option<&[crate::commands::ranges::LineRange]>,
-    ) -> WsResult<String> {
+    fn read(&self, path: &str, ranges: Option<&[LineRange]>) -> WsResult<String> {
         match self {
             BackendHandle::File(b) => b.read(path, ranges),
             BackendHandle::Mysql(b) => b.read(path, ranges),
@@ -94,16 +54,13 @@ impl WorkspaceBackend for BackendHandle {
 
 pub fn open_scoped_backend(
     config: &crate::config::Config,
-    scope: crate::workspace::SessionScope,
+    scope: SessionScope,
 ) -> WsResult<BackendHandle> {
     let backend = open_backend(config)?;
     apply_session_scope(backend, scope)
 }
 
-fn apply_session_scope(
-    backend: BackendHandle,
-    scope: crate::workspace::SessionScope,
-) -> WsResult<BackendHandle> {
+fn apply_session_scope(backend: BackendHandle, scope: SessionScope) -> WsResult<BackendHandle> {
     if scope.prefix().is_none() {
         return Ok(backend);
     }

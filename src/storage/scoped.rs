@@ -1,8 +1,8 @@
-use crate::backend::mysql::MySqlBackend;
-use crate::backend::{ListReport, WorkspaceBackend};
-use crate::commands::ranges::LineRange;
+use crate::storage::mysql::MySqlBackend;
+use crate::storage::{ListReport, WorkspaceBackend};
+use crate::ranges::LineRange;
 use crate::error::WsResult;
-use crate::workspace::SessionScope;
+use crate::scoping::SessionScope;
 
 pub struct ScopedMySqlBackend {
     inner: MySqlBackend,
@@ -32,7 +32,7 @@ impl WorkspaceBackend for ScopedMySqlBackend {
     fn read(
         &self,
         path: &str,
-        ranges: Option<&[crate::commands::ranges::LineRange]>,
+        ranges: Option<&[crate::ranges::LineRange]>,
     ) -> WsResult<String> {
         self.inner.read(&self.scope.storage_path(path), ranges)
     }
