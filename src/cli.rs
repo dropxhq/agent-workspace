@@ -52,13 +52,13 @@ enum Commands {
         ranges: Option<String>,
         /// Creator identifier stored in metadata
         #[arg(long)]
-        created_by: Option<String>,
+        created_by: String,
         /// Description stored in metadata
         #[arg(long)]
-        desc: Option<String>,
-        /// Content to write (otherwise read from stdin)
+        desc: String,
+        /// Content to write
         #[arg(long)]
-        content: Option<String>,
+        content: String,
         /// User identifier; scopes root to workspace_dir/user_id (or .../user_id/session_id with --session-id)
         #[arg(long)]
         user_id: Option<String>,
@@ -125,9 +125,9 @@ fn dispatch(command: Commands, config: &Config) -> Result<(), WsError> {
             commands::write::run(
                 &path,
                 ranges.as_deref(),
-                created_by.as_deref().unwrap_or(""),
-                desc.as_deref().unwrap_or(""),
-                content.as_deref(),
+                &created_by,
+                &desc,
+                &content,
                 &backend,
             )?
         }

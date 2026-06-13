@@ -100,7 +100,7 @@ fn mysql_write_read_remove_lifecycle() {
         None,
         "agent-x",
         "test file",
-        Some("hello\nworld\n"),
+        "hello\nworld\n",
         &backend,
     )
     .unwrap();
@@ -132,7 +132,7 @@ fn mysql_write_with_ranges_partial_replace() {
         None,
         "agent",
         "",
-        Some("a\nb\nc\n"),
+        "a\nb\nc\n",
         &backend,
     )
     .unwrap();
@@ -142,7 +142,7 @@ fn mysql_write_with_ranges_partial_replace() {
         Some("2-2"),
         "",
         "",
-        Some("B\n"),
+        "B\n",
         &backend,
     )
     .unwrap();
@@ -180,9 +180,9 @@ fn mysql_list_subdirectory_scope() {
     let docs_path = unique_test_path("docs_a").replace("test/", "test/docs/");
     let other_path = unique_test_path("other_b").replace("test/", "test/other/");
 
-    agent_workspace::commands::write::run(&docs_path, None, "agent", "", Some("a"), &backend)
+    agent_workspace::commands::write::run(&docs_path, None, "agent", "", "a", &backend)
         .unwrap();
-    agent_workspace::commands::write::run(&other_path, None, "agent", "", Some("b"), &backend)
+    agent_workspace::commands::write::run(&other_path, None, "agent", "", "b", &backend)
         .unwrap();
 
     let report = backend.list(Some("test/docs")).unwrap();

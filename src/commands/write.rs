@@ -1,5 +1,3 @@
-use std::io::{self, Read};
-
 use crate::storage::{BackendHandle, WorkspaceBackend};
 use crate::ranges::{parse_ranges, LineRange};
 use crate::error::{WsError, WsResult};
@@ -9,10 +7,10 @@ pub fn run(
     ranges: Option<&str>,
     created_by: &str,
     desc: &str,
-    content_arg: Option<&str>,
+    content: &str,
     backend: &BackendHandle,
 ) -> WsResult<()> {
-    let new_content = read_input(content_arg)?;
+    let new_content = content.to_string();
 
     let parsed_range = ranges.map(parse_ranges).transpose()?.and_then(|mut v| {
         if v.len() > 1 {
@@ -31,16 +29,6 @@ pub fn run(
     backend.write(path, parsed_range.as_ref(), &new_content, created_by, desc)?;
 
     Ok(())
-}
-
-fn read_input(content_arg: Option<&str>) -> WsResult<String> {
-    if let Some(content) = content_arg {
-        return Ok(content.to_string());
-    }
-
-    let mut buf = String::new();
-    io::stdin().read_to_string(&mut buf).map_err(WsError::Io)?;
-    Ok(buf)
 }
 
 #[cfg(test)]

@@ -32,7 +32,7 @@ fn write_read_remove_lifecycle() {
         None,
         "agent-x",
         "test file",
-        Some("hello\nworld\n"),
+        "hello\nworld\n",
         &backend,
     )
     .unwrap();
@@ -59,7 +59,7 @@ fn write_with_ranges_partial_replace() {
         None,
         "agent",
         "",
-        Some("a\nb\nc\n"),
+        "a\nb\nc\n",
         &backend,
     )
     .unwrap();
@@ -69,7 +69,7 @@ fn write_with_ranges_partial_replace() {
         Some("2-2"),
         "",
         "",
-        Some("B\n"),
+        "B\n",
         &backend,
     )
     .unwrap();
@@ -148,7 +148,7 @@ fn metadata_preserves_created_fields_on_update() {
         None,
         "original-agent",
         "first",
-        Some("v1\n"),
+        "v1\n",
         &backend,
     )
     .unwrap();
@@ -165,7 +165,7 @@ fn metadata_preserves_created_fields_on_update() {
         None,
         "new-agent",
         "second",
-        Some("v2\n"),
+        "v2\n",
         &backend,
     )
     .unwrap();
@@ -184,7 +184,7 @@ fn metadata_preserves_created_fields_on_update() {
 fn list_json_output() {
     let (_tmp, _workspace_dir, backend) = setup_workspace();
 
-    agent_workspace::commands::write::run("a.txt", None, "agent", "", Some("x"), &backend).unwrap();
+    agent_workspace::commands::write::run("a.txt", None, "agent", "", "x", &backend).unwrap();
 
     agent_workspace::commands::list::run(None, true, &backend).unwrap();
 }
@@ -193,9 +193,9 @@ fn list_json_output() {
 fn list_subdirectory_scope() {
     let (_tmp, _workspace_dir, backend) = setup_workspace();
 
-    agent_workspace::commands::write::run("docs/a.txt", None, "agent", "", Some("a"), &backend)
+    agent_workspace::commands::write::run("docs/a.txt", None, "agent", "", "a", &backend)
         .unwrap();
-    agent_workspace::commands::write::run("other/b.txt", None, "agent", "", Some("b"), &backend)
+    agent_workspace::commands::write::run("other/b.txt", None, "agent", "", "b", &backend)
         .unwrap();
 
     let report = backend.list(Some("docs")).unwrap();
@@ -217,7 +217,7 @@ fn read_with_ranges() {
         None,
         "agent",
         "",
-        Some("one\ntwo\nthree\nfour\n"),
+        "one\ntwo\nthree\nfour\n",
         &backend,
     )
     .unwrap();
@@ -242,7 +242,7 @@ fn concurrent_writes_do_not_corrupt() {
                     None,
                     "agent",
                     "",
-                    Some(&format!("iteration {i}\n")),
+                    &format!("iteration {i}\n"),
                     &backend,
                 )
                 .unwrap();
@@ -303,7 +303,7 @@ fn session_scope_isolates_files_under_user_and_session() {
         None,
         "agent",
         "scoped",
-        Some("scoped content\n"),
+        "scoped content\n",
         &scoped,
     )
     .unwrap();
@@ -348,7 +348,7 @@ fn user_only_scope_isolates_files_under_user_directory() {
         None,
         "agent",
         "",
-        Some("root\n"),
+        "root\n",
         &user_scoped,
     )
     .unwrap();
@@ -380,7 +380,7 @@ fn session_only_scope_falls_back_to_workspace_root() {
         None,
         "agent",
         "",
-        Some("root\n"),
+        "root\n",
         &session_only,
     )
     .unwrap();

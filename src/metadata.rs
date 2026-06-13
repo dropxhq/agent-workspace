@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::Path;
 
-use chrono::{DateTime, FixedOffset, Utc};
+use chrono::{DateTime, FixedOffset, Local};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
@@ -48,7 +48,7 @@ pub fn compute_sha256(content: &[u8]) -> String {
 }
 
 pub fn now_local() -> DateTime<FixedOffset> {
-    Utc::now().fixed_offset()
+    Local::now().fixed_offset()
 }
 
 pub fn sidecar_absolute(config: &Config, data_relative: &str) -> WsResult<std::path::PathBuf> {

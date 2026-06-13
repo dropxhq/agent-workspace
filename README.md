@@ -130,26 +130,24 @@ ws read docs/foo.txt --ranges 1-10,20-30
 
 ### `write` — 写入文件
 
-内容来自 stdin 或 `--content`：
+`--content`、`--created-by`、`--desc` 均为必选参数：
 
 ```bash
-echo "hello" | ws write docs/foo.txt --created-by agent-x --desc "需求草稿"
-
-ws write docs/foo.txt --content "hello\n" --created-by agent-x
+ws write docs/foo.txt --content "hello\n" --created-by agent-x --desc "需求草稿"
 ```
 
 按行区间局部替换（删除 `START..END` 行，在该位置插入新内容）：
 
 ```bash
-ws write docs/foo.txt --ranges 2-5 --content "替换内容\n"
+ws write docs/foo.txt --ranges 2-5 --content "替换内容\n" --created-by agent-x --desc "局部更新"
 ```
 
 | 选项 | 说明 |
 |------|------|
+| `--content` | 写入内容（必选） |
+| `--created-by` | 写入元数据，首次创建时记录（必选） |
+| `--desc` | 文件描述（必选） |
 | `--ranges START-END` | 1-indexed，含端点；省略则整文件覆盖 |
-| `--created-by` | 写入元数据，首次创建时记录 |
-| `--desc` | 文件描述 |
-| `--content` | 直接指定内容；省略则从 stdin 读取 |
 
 更新已有文件时，元数据中的 `created_by` / `created_at` 会保留，其余字段更新。
 
@@ -269,7 +267,7 @@ ws init ./my-workspace
 cd my-workspace
 
 # 写入、读取、列出、删除
-echo "# 标题" | ws write docs/readme.md --created-by me --desc "示例文件"
+ws write docs/readme.md --content "# 标题\n" --created-by me --desc "示例文件"
 ws read docs/readme.md --human
 ws list
 ws remove docs/readme.md
