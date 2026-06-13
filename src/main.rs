@@ -2,10 +2,11 @@ use std::process;
 
 use clap::{Parser, Subcommand};
 
-use agent_workspace::backend::{open_backend, BackendHandle};
+use agent_workspace::backend::{open_scoped_backend, BackendHandle};
 use agent_workspace::commands;
 use agent_workspace::config::Config;
 use agent_workspace::error::WsError;
+use agent_workspace::workspace::SessionScope;
 
 #[derive(Parser)]
 #[command(
@@ -37,6 +38,12 @@ enum Commands {
         /// Human-readable output with line numbers
         #[arg(long)]
         human: bool,
+        /// User identifier; scopes root to workspace_dir/user_id (or .../user_id/session_id with --session-id)
+        #[arg(long)]
+        user_id: Option<String>,
+        /// Session identifier; with --user-id scopes root to workspace_dir/user_id/session_id
+        #[arg(long)]
+        session_id: Option<String>,
     },
     /// Write content to a workspace file (stdin or --content)
     Write {
@@ -54,6 +61,12 @@ enum Commands {
         /// Content to write (otherwise read from stdin)
         #[arg(long)]
         content: Option<String>,
+        /// User identifier; scopes root to workspace_dir/user_id (or .../user_id/session_id with --session-id)
+        #[arg(long)]
+        user_id: Option<String>,
+        /// Session identifier; with --user-id scopes root to workspace_dir/user_id/session_id
+        #[arg(long)]
+        session_id: Option<String>,
     },
     /// List workspace files (optionally scoped to a subdirectory)
     List {
@@ -62,6 +75,12 @@ enum Commands {
         /// Output JSON
         #[arg(long)]
         json: bool,
+        /// User identifier; scopes root to workspace_dir/user_id (or .../user_id/session_id with --session-id)
+        #[arg(long)]
+        user_id: Option<String>,
+        /// Session identifier; with --user-id scopes root to workspace_dir/user_id/session_id
+        #[arg(long)]
+        session_id: Option<String>,
     },
     /// Remove a file and its metadata sidecar
     Remove {
@@ -84,37 +103,66 @@ fn run() -> Result<(), WsError> {
         Commands::Init { path, backend } => commands::init::run(path.as_deref(), &backend),
         command => {
             let config = Config::load()?;
-            let backend = open_backend(&config)?;
-            dispatch(command, &backend)
+            dispatch(command, &config)
         }
     }
 }
 
-fn dispatch(command: Commands, backend: &BackendHandle) -> Result<(), WsError> {
+fn dispatch(command: Commands, config: &Config) -> Result<(), WsError> {
     match command {
         Commands::Init { .. } => unreachable!(),
         Commands::Read {
             path,
             ranges,
             human,
-        } => commands::read::run(&path, ranges.as_deref(), human, backend)?,
+            user_id,
+            session_id,
+        } => {
+            let backend = scoped_backend(config, user_id.as_deref(), session_id.as_deref())?;
+            commands::read::run(&path, ranges.as_deref(), human, &backend)?
+        }
         Commands::Write {
             path,
             ranges,
             created_by,
             desc,
             content,
-        } => commands::write::run(
-            &path,
-            ranges.as_deref(),
-            created_by.as_deref().unwrap_or(""),
-            desc.as_deref().unwrap_or(""),
-            content.as_deref(),
-            backend,
-        )?,
-        Commands::List { path, json } => commands::list::run(path.as_deref(), json, backend)?,
-        Commands::Remove { path } => commands::remove::run(&path, backend)?,
+            user_id,
+            session_id,
+        } => {
+            let backend = scoped_backend(config, user_id.as_deref(), session_id.as_deref())?;
+            commands::write::run(
+                &path,
+                ranges.as_deref(),
+                created_by.as_deref().unwrap_or(""),
+                desc.as_deref().unwrap_or(""),
+                content.as_deref(),
+                &backend,
+            )?
+        }
+        Commands::List {
+            path,
+            json,
+            user_id,
+            session_id,
+        } => {
+            let backend = scoped_backend(config, user_id.as_deref(), session_id.as_deref())?;
+            commands::list::run(path.as_deref(), json, &backend)?
+        }
+        Commands::Remove { path } => {
+            let backend = open_scoped_backend(config, SessionScope::default())?;
+            commands::remove::run(&path, &backend)?
+        }
     }
 
     Ok(())
+}
+
+fn scoped_backend(
+    config: &Config,
+    user_id: Option<&str>,
+    session_id: Option<&str>,
+) -> Result<BackendHandle, WsError> {
+    let scope = SessionScope::from_options(user_id, session_id)?;
+    open_scoped_backend(config, scope)
 }

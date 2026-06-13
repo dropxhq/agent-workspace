@@ -1,11 +1,13 @@
 use crate::commands::ranges::LineRange;
 use crate::error::WsResult;
+use std::fs;
 use crate::meta::FileMetadata;
 
 pub mod content;
 pub mod file;
 pub mod mysql;
 pub mod path;
+pub mod scoped;
 
 use serde::Serialize;
 
@@ -42,6 +44,7 @@ pub trait WorkspaceBackend {
 pub enum BackendHandle {
     File(file::FileBackend),
     Mysql(mysql::MySqlBackend),
+    ScopedMysql(scoped::ScopedMySqlBackend),
 }
 
 impl WorkspaceBackend for BackendHandle {
@@ -53,6 +56,7 @@ impl WorkspaceBackend for BackendHandle {
         match self {
             BackendHandle::File(b) => b.read(path, ranges),
             BackendHandle::Mysql(b) => b.read(path, ranges),
+            BackendHandle::ScopedMysql(b) => b.read(path, ranges),
         }
     }
 
@@ -67,6 +71,7 @@ impl WorkspaceBackend for BackendHandle {
         match self {
             BackendHandle::File(b) => b.write(path, ranges, content, created_by, desc),
             BackendHandle::Mysql(b) => b.write(path, ranges, content, created_by, desc),
+            BackendHandle::ScopedMysql(b) => b.write(path, ranges, content, created_by, desc),
         }
     }
 
@@ -74,6 +79,7 @@ impl WorkspaceBackend for BackendHandle {
         match self {
             BackendHandle::File(b) => b.list(scope),
             BackendHandle::Mysql(b) => b.list(scope),
+            BackendHandle::ScopedMysql(b) => b.list(scope),
         }
     }
 
@@ -81,7 +87,40 @@ impl WorkspaceBackend for BackendHandle {
         match self {
             BackendHandle::File(b) => b.remove(path),
             BackendHandle::Mysql(b) => b.remove(path),
+            BackendHandle::ScopedMysql(b) => b.remove(path),
         }
+    }
+}
+
+pub fn open_scoped_backend(
+    config: &crate::config::Config,
+    scope: crate::workspace::SessionScope,
+) -> WsResult<BackendHandle> {
+    let backend = open_backend(config)?;
+    apply_session_scope(backend, scope)
+}
+
+fn apply_session_scope(
+    backend: BackendHandle,
+    scope: crate::workspace::SessionScope,
+) -> WsResult<BackendHandle> {
+    if scope.prefix().is_none() {
+        return Ok(backend);
+    }
+
+    match backend {
+        BackendHandle::File(file_backend) => {
+            let root = scope.effective_root(&file_backend.workspace_dir);
+            fs::create_dir_all(&root).map_err(crate::error::WsError::Io)?;
+            Ok(BackendHandle::File(file::FileBackend::new(
+                root,
+                file_backend.metadata_suffix,
+            )))
+        }
+        BackendHandle::Mysql(mysql_backend) => Ok(BackendHandle::ScopedMysql(
+            scoped::ScopedMySqlBackend::new(mysql_backend, scope),
+        )),
+        BackendHandle::ScopedMysql(_) => unreachable!("scoped mysql backend is not nested"),
     }
 }
 

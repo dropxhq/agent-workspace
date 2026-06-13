@@ -1,0 +1,65 @@
+use crate::backend::mysql::MySqlBackend;
+use crate::backend::{ListReport, WorkspaceBackend};
+use crate::commands::ranges::LineRange;
+use crate::error::WsResult;
+use crate::workspace::SessionScope;
+
+pub struct ScopedMySqlBackend {
+    inner: MySqlBackend,
+    scope: SessionScope,
+}
+
+impl ScopedMySqlBackend {
+    pub fn new(inner: MySqlBackend, scope: SessionScope) -> Self {
+        Self { inner, scope }
+    }
+
+    fn scoped_list(&self, scope: Option<&str>) -> WsResult<ListReport> {
+        let storage_scope = scope.map(|s| self.scope.storage_path(s));
+        let storage_scope = storage_scope.as_deref();
+        let mut report = self.inner.list(storage_scope)?;
+
+        report.scope = scope.map(|s| self.scope.display_path(&self.scope.storage_path(s)));
+        for file in &mut report.files {
+            file.relative_path = self.scope.display_path(&file.relative_path);
+        }
+
+        Ok(report)
+    }
+}
+
+impl WorkspaceBackend for ScopedMySqlBackend {
+    fn read(
+        &self,
+        path: &str,
+        ranges: Option<&[crate::commands::ranges::LineRange]>,
+    ) -> WsResult<String> {
+        self.inner.read(&self.scope.storage_path(path), ranges)
+    }
+
+    fn write(
+        &self,
+        path: &str,
+        ranges: Option<&LineRange>,
+        content: &str,
+        created_by: &str,
+        desc: &str,
+    ) -> WsResult<()> {
+        self.inner
+            .write(
+                &self.scope.storage_path(path),
+                ranges,
+                content,
+                created_by,
+                desc,
+            )
+    }
+
+    fn list(&self, scope: Option<&str>) -> WsResult<ListReport> {
+        self.scoped_list(scope)
+    }
+
+    fn remove(&self, path: &str) -> WsResult<()> {
+        self.inner.remove(&self.scope.storage_path(path))
+    }
+}

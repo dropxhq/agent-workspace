@@ -2,8 +2,9 @@ use std::fs;
 
 use tempfile::TempDir;
 
-use agent_workspace::backend::{file::FileBackend, BackendHandle, WorkspaceBackend};
-use agent_workspace::workspace::{normalize_workspace_relative, parse_ws_path_in};
+use agent_workspace::backend::{file::FileBackend, open_scoped_backend, BackendHandle, WorkspaceBackend};
+use agent_workspace::config::Config;
+use agent_workspace::workspace::{normalize_workspace_relative, parse_ws_path_in, SessionScope};
 
 fn setup_workspace() -> (TempDir, std::path::PathBuf, BackendHandle) {
     let tmp = TempDir::new().unwrap();
@@ -274,4 +275,113 @@ fn init_creates_workspace_layout() {
     let err =
         agent_workspace::commands::init::run(Some(target.to_str().unwrap()), "file").unwrap_err();
     assert!(matches!(err, agent_workspace::error::WsError::Other(_)));
+}
+
+#[test]
+fn session_scope_isolates_files_under_user_and_session() {
+    let (_tmp, workspace_dir, _backend) = setup_workspace();
+
+    let config = Config {
+        config_path: workspace_dir.parent().unwrap().join("config.yaml"),
+        backend: agent_workspace::config::BackendConfig::File {
+            workspace_dir: workspace_dir.clone(),
+            metadata_suffix: ".meta.yaml".to_string(),
+        },
+    };
+
+    let scoped = open_scoped_backend(
+        &config,
+        SessionScope::from_options(Some("user-a"), Some("sess-1")).unwrap(),
+    )
+    .unwrap();
+
+    agent_workspace::commands::write::run(
+        "docs/foo.txt",
+        None,
+        "agent",
+        "scoped",
+        Some("scoped content\n"),
+        &scoped,
+    )
+    .unwrap();
+
+    let scoped_path = workspace_dir.join("user-a/sess-1/docs/foo.txt");
+    assert!(scoped_path.is_file());
+    assert!(workspace_dir
+        .join("user-a/sess-1/docs/foo.txt.meta.yaml")
+        .is_file());
+
+    let unscoped = open_scoped_backend(&config, SessionScope::default()).unwrap();
+    let err = agent_workspace::commands::read::run("docs/foo.txt", None, false, &unscoped);
+    assert!(err.is_err());
+
+    agent_workspace::commands::read::run("docs/foo.txt", None, false, &scoped).unwrap();
+
+    let list = scoped.list(None).unwrap();
+    assert_eq!(list.file_count, 1);
+    assert_eq!(list.files[0].relative_path, "docs/foo.txt");
+}
+
+#[test]
+fn user_only_scope_isolates_files_under_user_directory() {
+    let (_tmp, workspace_dir, _backend) = setup_workspace();
+
+    let config = Config {
+        config_path: workspace_dir.parent().unwrap().join("config.yaml"),
+        backend: agent_workspace::config::BackendConfig::File {
+            workspace_dir: workspace_dir.clone(),
+            metadata_suffix: ".meta.yaml".to_string(),
+        },
+    };
+
+    let user_scoped = open_scoped_backend(
+        &config,
+        SessionScope::from_options(Some("user-a"), None).unwrap(),
+    )
+    .unwrap();
+
+    agent_workspace::commands::write::run(
+        "root.txt",
+        None,
+        "agent",
+        "",
+        Some("root\n"),
+        &user_scoped,
+    )
+    .unwrap();
+
+    assert!(workspace_dir.join("user-a/root.txt").is_file());
+    assert!(!workspace_dir.join("root.txt").exists());
+}
+
+#[test]
+fn session_only_scope_falls_back_to_workspace_root() {
+    let (_tmp, workspace_dir, _backend) = setup_workspace();
+
+    let config = Config {
+        config_path: workspace_dir.parent().unwrap().join("config.yaml"),
+        backend: agent_workspace::config::BackendConfig::File {
+            workspace_dir: workspace_dir.clone(),
+            metadata_suffix: ".meta.yaml".to_string(),
+        },
+    };
+
+    let session_only = open_scoped_backend(
+        &config,
+        SessionScope::from_options(None, Some("sess-1")).unwrap(),
+    )
+    .unwrap();
+
+    agent_workspace::commands::write::run(
+        "root.txt",
+        None,
+        "agent",
+        "",
+        Some("root\n"),
+        &session_only,
+    )
+    .unwrap();
+
+    assert!(workspace_dir.join("root.txt").is_file());
+    assert!(!workspace_dir.join("sess-1/root.txt").exists());
 }
