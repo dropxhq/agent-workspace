@@ -10,8 +10,12 @@ pub struct ResolvedPath {
 }
 
 pub fn parse_ws_path(input: &str, config: &Config) -> WsResult<ResolvedPath> {
+    parse_ws_path_in(config.workspace_dir(), input)
+}
+
+pub fn parse_ws_path_in(workspace_dir: &Path, input: &str) -> WsResult<ResolvedPath> {
     let relative = normalize_workspace_relative(input);
-    resolve_relative(&relative, config)
+    resolve_relative_in(&relative, workspace_dir)
 }
 
 pub fn normalize_workspace_relative(path: &str) -> String {
@@ -34,8 +38,12 @@ pub fn normalize_workspace_relative(path: &str) -> String {
 }
 
 pub fn resolve_relative(relative: &str, config: &Config) -> WsResult<ResolvedPath> {
-    let absolute = config.workspace_dir().join(relative);
-    validate_within_workspace(&absolute, config.workspace_dir())?;
+    resolve_relative_in(relative, config.workspace_dir())
+}
+
+pub fn resolve_relative_in(relative: &str, workspace_dir: &Path) -> WsResult<ResolvedPath> {
+    let absolute = workspace_dir.join(relative);
+    validate_within_workspace(&absolute, workspace_dir)?;
 
     Ok(ResolvedPath {
         relative: relative.to_string(),
@@ -93,18 +101,27 @@ pub fn data_path_from_metadata(relative: &str, metadata_suffix: &str) -> Option<
 
 /// Parse a workspace-relative path for write/remove when parent dirs may not exist yet.
 pub fn parse_ws_path_for_write(input: &str, config: &Config) -> WsResult<ResolvedPath> {
+    parse_ws_path_for_write_in(config.workspace_dir(), config.metadata_suffix(), input)
+}
+
+/// Parse a workspace-relative path for write/remove when parent dirs may not exist yet.
+pub fn parse_ws_path_for_write_in(
+    workspace_dir: &Path,
+    metadata_suffix: &str,
+    input: &str,
+) -> WsResult<ResolvedPath> {
     let relative = normalize_workspace_relative(input);
 
-    if is_metadata_path(&relative, config.metadata_suffix()) {
+    if is_metadata_path(&relative, metadata_suffix) {
         return Err(WsError::NotFound(relative));
     }
 
-    let absolute = config.workspace_dir().join(&relative);
+    let absolute = workspace_dir.join(&relative);
 
     if absolute.exists() {
-        validate_within_workspace(&absolute, config.workspace_dir())?;
+        validate_within_workspace(&absolute, workspace_dir)?;
     } else {
-        validate_parent_within_workspace(&absolute, config.workspace_dir())?;
+        validate_parent_within_workspace(&absolute, workspace_dir)?;
     }
 
     Ok(ResolvedPath {

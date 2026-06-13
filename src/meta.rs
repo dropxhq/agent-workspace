@@ -7,7 +7,7 @@ use sha2::{Digest, Sha256};
 
 use crate::config::Config;
 use crate::error::{WsError, WsResult};
-use crate::workspace::{metadata_path_for, resolve_relative};
+use crate::workspace::{metadata_path_for, resolve_relative_in};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct FileMetadata {
@@ -52,8 +52,16 @@ pub fn now_local() -> DateTime<FixedOffset> {
 }
 
 pub fn sidecar_absolute(config: &Config, data_relative: &str) -> WsResult<std::path::PathBuf> {
-    let meta_relative = metadata_path_for(data_relative, config.metadata_suffix());
-    Ok(resolve_relative(&meta_relative, config)?.absolute)
+    sidecar_absolute_in(config.workspace_dir(), config.metadata_suffix(), data_relative)
+}
+
+pub fn sidecar_absolute_in(
+    workspace_dir: &Path,
+    metadata_suffix: &str,
+    data_relative: &str,
+) -> WsResult<std::path::PathBuf> {
+    let meta_relative = metadata_path_for(data_relative, metadata_suffix);
+    Ok(resolve_relative_in(&meta_relative, workspace_dir)?.absolute)
 }
 
 pub fn build_metadata(
@@ -63,7 +71,25 @@ pub fn build_metadata(
     created_by: &str,
     desc: &str,
 ) -> WsResult<FileMetadata> {
-    let sidecar = sidecar_absolute(config, data_relative)?;
+    build_metadata_in(
+        config.workspace_dir(),
+        config.metadata_suffix(),
+        data_relative,
+        content,
+        created_by,
+        desc,
+    )
+}
+
+pub fn build_metadata_in(
+    workspace_dir: &Path,
+    metadata_suffix: &str,
+    data_relative: &str,
+    content: &[u8],
+    created_by: &str,
+    desc: &str,
+) -> WsResult<FileMetadata> {
+    let sidecar = sidecar_absolute_in(workspace_dir, metadata_suffix, data_relative)?;
     let now = now_local();
 
     let (created_by_val, created_at) = if sidecar.exists() {
