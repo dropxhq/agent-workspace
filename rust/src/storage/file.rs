@@ -1,3 +1,4 @@
+use crate::config::IoOptions;
 use crate::error::{WsError, WsResult};
 use std::fs;
 use std::io;
@@ -32,6 +33,7 @@ impl WorkspaceBackend for FileBackend {
         &self,
         path: &str,
         ranges: Option<&[crate::ranges::LineRange]>,
+        _opts: IoOptions,
     ) -> WsResult<String> {
         let resolved = parse_ws_path_in(&self.workspace_dir, path)?;
 
@@ -67,6 +69,7 @@ impl WorkspaceBackend for FileBackend {
         content: &str,
         created_by: &str,
         desc: &str,
+        _opts: IoOptions,
     ) -> WsResult<()> {
         let resolved =
             parse_ws_path_for_write_in(&self.workspace_dir, &self.metadata_suffix, path)?;
@@ -224,6 +227,7 @@ fn resolve_list_scope(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::config::IoOptions;
     use std::path::PathBuf;
     use tempfile::TempDir;
 
@@ -248,14 +252,14 @@ mod tests {
         let (_tmp, backend) = setup_backend();
 
         backend
-            .write("docs/note.txt", None, "one\ntwo\nthree\n", "agent", "seed")
+            .write("docs/note.txt", None, "one\ntwo\nthree\n", "agent", "seed", IoOptions::default())
             .unwrap();
 
-        let all = backend.read("docs/note.txt", None).unwrap();
+        let all = backend.read("docs/note.txt", None, IoOptions::default()).unwrap();
         assert_eq!(all, "one\ntwo\nthree\n");
 
         let ranges = [LineRange { start: 2, end: 3 }];
-        let filtered = backend.read("docs/note.txt", Some(&ranges)).unwrap();
+        let filtered = backend.read("docs/note.txt", Some(&ranges), IoOptions::default()).unwrap();
         assert_eq!(filtered, "two\nthree\n");
 
         let sidecar = file_path(&backend, "docs/note.txt.meta.yaml");
@@ -267,7 +271,7 @@ mod tests {
         let (_tmp, backend) = setup_backend();
 
         backend
-            .write("partial.txt", None, "a\nb\nc\n", "agent", "")
+            .write("partial.txt", None, "a\nb\nc\n", "agent", "", IoOptions::default())
             .unwrap();
         backend
             .write(
@@ -276,10 +280,11 @@ mod tests {
                 "B\n",
                 "agent",
                 "",
+                IoOptions::default(),
             )
             .unwrap();
 
-        let content = backend.read("partial.txt", None).unwrap();
+        let content = backend.read("partial.txt", None, IoOptions::default()).unwrap();
         assert_eq!(content, "a\nB\nc\n");
     }
 
@@ -287,9 +292,11 @@ mod tests {
     fn list_scope_and_remove_work_end_to_end() {
         let (_tmp, backend) = setup_backend();
 
-        backend.write("docs/a.txt", None, "A", "agent", "").unwrap();
         backend
-            .write("other/b.txt", None, "BB", "agent", "")
+            .write("docs/a.txt", None, "A", "agent", "", IoOptions::default())
+            .unwrap();
+        backend
+            .write("other/b.txt", None, "BB", "agent", "", IoOptions::default())
             .unwrap();
 
         let scoped = backend.list(Some("docs")).unwrap();
@@ -311,7 +318,9 @@ mod tests {
         let (_tmp, backend) = setup_backend();
         fs::write(file_path(&backend, "secret.txt.meta.yaml"), "dummy").unwrap();
 
-        let read_err = backend.read("secret.txt.meta.yaml", None).unwrap_err();
+        let read_err = backend
+            .read("secret.txt.meta.yaml", None, IoOptions::default())
+            .unwrap_err();
         assert!(matches!(read_err, WsError::NotFound(_)));
 
         let remove_err = backend.remove("secret.txt.meta.yaml").unwrap_err();

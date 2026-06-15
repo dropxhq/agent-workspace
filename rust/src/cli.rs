@@ -4,7 +4,7 @@ use clap::{CommandFactory, Parser, Subcommand};
 
 use crate::storage::{open_scoped_backend, BackendHandle};
 use crate::commands;
-use crate::config::Config;
+use crate::config::{Config, IoOptions};
 use crate::error::WsError;
 use crate::scoping::SessionScope;
 
@@ -48,8 +48,10 @@ enum Commands {
         /// Session identifier; with --user-id scopes root to workspace_dir/user_id/session_id
         #[arg(long)]
         session_id: Option<String>,
+        /// Bypass configured read/write hooks for this operation
+        #[arg(long)]
+        no_hooks: bool,
     },
-    /// Write content to a workspace file (stdin or --content)
     Write {
         /// Workspace-relative path
         path: String,
@@ -71,6 +73,9 @@ enum Commands {
         /// Session identifier; with --user-id scopes root to workspace_dir/user_id/session_id
         #[arg(long)]
         session_id: Option<String>,
+        /// Bypass configured read/write hooks for this operation
+        #[arg(long)]
+        no_hooks: bool,
     },
     /// List workspace files (optionally scoped to a subdirectory)
     List {
@@ -135,9 +140,13 @@ fn dispatch(command: Commands, config: &Config) -> Result<(), WsError> {
             human,
             user_id,
             session_id,
+            no_hooks,
         } => {
             let backend = scoped_backend(config, user_id.as_deref(), session_id.as_deref())?;
-            commands::read::run(&path, ranges.as_deref(), human, &backend)?
+            let opts = IoOptions {
+                skip_hooks: no_hooks,
+            };
+            commands::read::run(&path, ranges.as_deref(), human, &backend, opts)?
         }
         Commands::Write {
             path,
@@ -147,8 +156,12 @@ fn dispatch(command: Commands, config: &Config) -> Result<(), WsError> {
             content,
             user_id,
             session_id,
+            no_hooks,
         } => {
             let backend = scoped_backend(config, user_id.as_deref(), session_id.as_deref())?;
+            let opts = IoOptions {
+                skip_hooks: no_hooks,
+            };
             commands::write::run(
                 &path,
                 ranges.as_deref(),
@@ -156,6 +169,7 @@ fn dispatch(command: Commands, config: &Config) -> Result<(), WsError> {
                 &desc,
                 &content,
                 &backend,
+                opts,
             )?
         }
         Commands::List {

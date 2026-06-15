@@ -4,6 +4,7 @@ use serde::Deserialize;
 
 pub const DEFAULT_METADATA_SUFFIX: &str = ".meta.yaml";
 pub const DEFAULT_MYSQL_PORT: u16 = 3306;
+pub const DEFAULT_HOOK_TIMEOUT_MS: u64 = 30_000;
 
 fn default_metadata_suffix() -> String {
     DEFAULT_METADATA_SUFFIX.to_string()
@@ -19,6 +20,28 @@ fn default_type_file() -> String {
 
 fn default_type_mysql() -> String {
     "mysql".to_string()
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RawHookCommand {
+    pub command: Vec<String>,
+    pub timeout_ms: Option<u64>,
+}
+
+#[derive(Debug, Deserialize, Default)]
+pub struct RawHooks {
+    #[serde(default)]
+    pub read: Option<RawHookCommand>,
+    #[serde(default)]
+    pub write: Option<RawHookCommand>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RawConfig {
+    #[serde(flatten)]
+    pub backend: RawBackend,
+    #[serde(default)]
+    pub hooks: Option<RawHooks>,
 }
 
 #[derive(Debug, Deserialize)]

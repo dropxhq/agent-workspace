@@ -1,6 +1,7 @@
 use chrono::{NaiveDateTime, Utc};
 use sqlx::Row;
 
+use crate::config::IoOptions;
 use crate::error::{WsError, WsResult};
 use crate::metadata::{compute_sha256, FileMetadata};
 use crate::paths::{is_metadata_path, list_scope_prefix, normalize_workspace_relative};
@@ -14,7 +15,12 @@ pub use connection::MySqlBackend;
 use connection::{map_db_err, naive_utc_to_fixed, MYSQL_METADATA_SUFFIX};
 
 impl WorkspaceBackend for MySqlBackend {
-    fn read(&self, path: &str, ranges: Option<&[crate::ranges::LineRange]>) -> WsResult<String> {
+    fn read(
+        &self,
+        path: &str,
+        ranges: Option<&[crate::ranges::LineRange]>,
+        _opts: IoOptions,
+    ) -> WsResult<String> {
         let relative = normalize_workspace_relative(path);
         if is_metadata_path(&relative, MYSQL_METADATA_SUFFIX) {
             return Err(WsError::NotFound(relative));
@@ -45,6 +51,7 @@ impl WorkspaceBackend for MySqlBackend {
         content: &str,
         created_by: &str,
         desc: &str,
+        _opts: IoOptions,
     ) -> WsResult<()> {
         let relative = normalize_workspace_relative(path);
         if is_metadata_path(&relative, MYSQL_METADATA_SUFFIX) {

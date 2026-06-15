@@ -2,6 +2,13 @@ pub const DEFAULT_FILE_CONFIG: &str = r#"backend:
   type: file
   workspace_dir: ./data
   metadata_suffix: ".meta.yaml"
+
+# Optional content transformation hooks (external commands).
+# hooks:
+#   read:
+#     command: ["python", "hooks/decode.py"]
+#   write:
+#     command: ["python", "hooks/encode.py"]
 "#;
 
 pub const DEFAULT_MYSQL_CONFIG: &str = r#"backend:

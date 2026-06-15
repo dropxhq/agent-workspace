@@ -11,7 +11,7 @@
 use serde_json::{json, Value};
 
 use super::protocol::{RpcError, INVALID_PARAMS};
-use crate::config::Config;
+use crate::config::{Config, IoOptions};
 use crate::error::WsError;
 use crate::ranges::parse_ranges;
 use crate::scoping::SessionScope;
@@ -42,7 +42,8 @@ pub fn tool_definitions() -> Value {
                 "type": "object",
                 "properties": merge(json!({
                     "path": { "type": "string", "description": "Workspace-relative path." },
-                    "ranges": { "type": "string", "description": "Optional 1-indexed line ranges, comma-separated (e.g. 1-10,20-30)." }
+                    "ranges": { "type": "string", "description": "Optional 1-indexed line ranges, comma-separated (e.g. 1-10,20-30)." },
+                    "skip_hooks": { "type": "boolean", "description": "If true, bypass configured read/write hooks for this call." }
                 }), &scope),
                 "required": ["path"]
             }
@@ -57,7 +58,8 @@ pub fn tool_definitions() -> Value {
                     "content": { "type": "string", "description": "Content to write." },
                     "created_by": { "type": "string", "description": "Creator identifier stored in metadata." },
                     "desc": { "type": "string", "description": "Description stored in metadata." },
-                    "ranges": { "type": "string", "description": "Optional single range START-END (1-indexed, inclusive) to replace." }
+                    "ranges": { "type": "string", "description": "Optional single range START-END (1-indexed, inclusive) to replace." },
+                    "skip_hooks": { "type": "boolean", "description": "If true, bypass configured read/write hooks for this call." }
                 }), &scope),
                 "required": ["path", "content", "created_by", "desc"]
             }
@@ -143,12 +145,21 @@ fn scope_of(args: &Value) -> Result<SessionScope, WsError> {
     SessionScope::from_options(arg_str(args, "user_id"), arg_str(args, "session_id"))
 }
 
+fn io_options(args: &Value) -> IoOptions {
+    IoOptions {
+        skip_hooks: args
+            .get("skip_hooks")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
+    }
+}
+
 fn read_tool(args: &Value, config: &Config) -> Result<String, WsError> {
     let path = required_str(args, "path")?;
     let parsed = arg_str(args, "ranges").map(parse_ranges).transpose()?;
     let backend = open_scoped_backend(config, scope_of(args)?)?;
     // The backend already applies range filtering when ranges are provided.
-    backend.read(path, parsed.as_deref())
+    backend.read(path, parsed.as_deref(), io_options(args))
 }
 
 fn write_tool(args: &Value, config: &Config) -> Result<String, WsError> {
@@ -171,7 +182,14 @@ fn write_tool(args: &Value, config: &Config) -> Result<String, WsError> {
     };
 
     let backend = open_scoped_backend(config, scope_of(args)?)?;
-    backend.write(path, parsed_range.as_ref(), content, created_by, desc)?;
+    backend.write(
+        path,
+        parsed_range.as_ref(),
+        content,
+        created_by,
+        desc,
+        io_options(args),
+    )?;
     Ok(format!("wrote {} bytes to {path}", content.len()))
 }
 

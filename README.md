@@ -9,6 +9,7 @@
 - **元数据**：file 后端使用 `*.meta.yaml` sidecar；mysql 后端将元数据存入数据库
 - **并发安全**：file 后端使用 advisory 文件锁；mysql 后端使用 InnoDB 行锁
 - **按行操作**：支持按行区间读取或局部替换写入
+- **内容 Hook**（可选）：`config.yaml` 可配置 read/write 外部命令，在逻辑内容与物理存储之间转换
 - **本地 MCP 服务**：`ws mcp` 通过 stdio 暴露 JSON-RPC（MCP 协议）工具，供 MCP 客户端调用工作区读写列删操作
 
 ## 安装
@@ -77,6 +78,38 @@ backend:
 
 连接时会自动确保数据库和 `workspace_files` 表存在。元数据（创建者、描述、时间戳、SHA256）与文件内容存储在同一张表中，不再使用 sidecar 文件。
 
+### 内容 Hook（可选）
+
+在 `backend` 块之外，可声明顶层 `hooks`，为当前配置文件绑定一套全局 **read** / **write** 外部命令。磁盘/数据库中存的是**物理内容**；CLI、MCP、Python 默认看到**逻辑内容**（经 read hook 转换后）。
+
+```yaml
+backend:
+  type: file
+  workspace_dir: ./data
+
+hooks:
+  read:
+    command: ["python", "hooks/decode.py"]
+    timeout_ms: 10000   # 可选，默认 30000
+  write:
+    command: ["python", "hooks/encode.py"]
+```
+
+**命令协议**
+
+| 项 | 约定 |
+|----|------|
+| `command` | 非空 argv 数组（不经 shell） |
+| 输入 | 完整内容经 **stdin** 传入（UTF-8） |
+| 输出 | **stdout** 全文作为结果（不 trim） |
+| 工作目录 | `config.yaml` 所在目录 |
+| 环境变量 | `WS_HOOK=read\|write`、`WS_PATH=<相对路径>` |
+| 失败 | 非零退出或超时 → 操作失败，不部分写入 |
+
+未配置 `hooks` 时行为与无 hook 版本完全一致。仅配置单侧 hook 时启动会打印 warning。
+
+**跳过 Hook**：`read` / `write` 支持 `--no-hooks`（MCP/Python：`skip_hooks: true`），直接读写物理存储内容。调试或手工修复时，应对 read/write 一致使用该选项，避免破坏存储格式。
+
 ### 加载顺序
 
 除 `init` 外，其余命令均通过配置文件加载后端。可按以下优先级指定配置文件：
@@ -140,6 +173,7 @@ ws read docs/foo.txt --ranges 1-10,20-30
 |------|------|
 | `--human` | 首行输出路径，每行前加行号（如 `    12 \| content`） |
 | `--ranges` | 1-indexed 行区间，逗号分隔；human 模式下仍显示真实行号 |
+| `--no-hooks` | 跳过配置的 read hook，返回物理存储内容 |
 
 默认输出文件原文（raw）。
 
@@ -163,6 +197,7 @@ ws write docs/foo.txt --ranges 2-5 --content "替换内容\n" --created-by agent
 | `--created-by` | 写入元数据，首次创建时记录（必选） |
 | `--desc` | 文件描述（必选） |
 | `--ranges START-END` | 1-indexed，含端点；省略则整文件覆盖 |
+| `--no-hooks` | 跳过配置的 read/write hook，直接读写物理存储内容 |
 
 更新已有文件时，元数据中的 `created_by` / `created_at` 会保留，其余字段更新。
 
@@ -202,8 +237,8 @@ ws mcp --config /path/to/config.yaml
 
 | 工具 | 必选参数 | 可选参数 | 说明 |
 |------|---------|---------|------|
-| `read` | `path` | `ranges` | 读取文件，可按 1-indexed 行区间过滤 |
-| `write` | `path`、`content`、`created_by`、`desc` | `ranges`（单个 `START-END`） | 写入或局部替换 |
+| `read` | `path` | `ranges`、`skip_hooks` | 读取文件，可按 1-indexed 行区间过滤 |
+| `write` | `path`、`content`、`created_by`、`desc` | `ranges`（单个 `START-END`）、`skip_hooks` | 写入或局部替换 |
 | `list` | — | `path` | 列出文件，返回 JSON 报告 |
 | `remove` | `path` | — | 删除文件及元数据 |
 

@@ -1,3 +1,4 @@
+use crate::config::IoOptions;
 use crate::storage::{BackendHandle, WorkspaceBackend};
 use crate::ranges::{parse_ranges, LineRange};
 use crate::error::{WsError, WsResult};
@@ -9,6 +10,7 @@ pub fn run(
     desc: &str,
     content: &str,
     backend: &BackendHandle,
+    opts: IoOptions,
 ) -> WsResult<()> {
     let new_content = content.to_string();
 
@@ -26,7 +28,7 @@ pub fn run(
     }
     let parsed_range: Option<LineRange> = parsed_range.transpose()?;
 
-    backend.write(path, parsed_range.as_ref(), &new_content, created_by, desc)?;
+    backend.write(path, parsed_range.as_ref(), &new_content, created_by, desc, opts)?;
 
     Ok(())
 }

@@ -9,6 +9,8 @@
 //!   cargo test --test mysql_integration -- --ignored
 //! ```
 
+use agent_workspace::config::IoOptions;
+
 use std::env;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -102,13 +104,14 @@ fn mysql_write_read_remove_lifecycle() {
         "test file",
         "hello\nworld\n",
         &backend,
+        IoOptions::default(),
     )
     .unwrap();
 
-    let content = backend.read(&path, None).unwrap();
+    let content = backend.read(&path, None, IoOptions::default()).unwrap();
     assert_eq!(content, "hello\nworld\n");
 
-    agent_workspace::commands::read::run(&path, None, false, &backend).unwrap();
+    agent_workspace::commands::read::run(&path, None, false, &backend, IoOptions::default()).unwrap();
 
     agent_workspace::commands::list::run(None, false, &backend).unwrap();
     let report = backend.list(None).unwrap();
@@ -116,7 +119,7 @@ fn mysql_write_read_remove_lifecycle() {
 
     agent_workspace::commands::remove::run(&path, &backend).unwrap();
     assert!(matches!(
-        backend.read(&path, None),
+        backend.read(&path, None, IoOptions::default()),
         Err(agent_workspace::error::WsError::NotFound(_))
     ));
 }
@@ -134,6 +137,7 @@ fn mysql_write_with_ranges_partial_replace() {
         "",
         "a\nb\nc\n",
         &backend,
+        IoOptions::default(),
     )
     .unwrap();
 
@@ -144,10 +148,11 @@ fn mysql_write_with_ranges_partial_replace() {
         "",
         "B\n",
         &backend,
+        IoOptions::default(),
     )
     .unwrap();
 
-    let content = backend.read(&path, None).unwrap();
+    let content = backend.read(&path, None, IoOptions::default()).unwrap();
     assert_eq!(content, "a\nB\nc\n");
 
     agent_workspace::commands::remove::run(&path, &backend).unwrap();
@@ -160,7 +165,7 @@ fn mysql_metadata_path_hidden_from_read_and_remove() {
     let meta_path = unique_test_path("secret").replace(".txt", ".meta.yaml");
 
     let err =
-        agent_workspace::commands::read::run(&meta_path, None, false, &backend).unwrap_err();
+        agent_workspace::commands::read::run(&meta_path, None, false, &backend, IoOptions::default()).unwrap_err();
     assert!(matches!(
         err,
         agent_workspace::error::WsError::NotFound(_)
@@ -180,9 +185,9 @@ fn mysql_list_subdirectory_scope() {
     let docs_path = unique_test_path("docs_a").replace("test/", "test/docs/");
     let other_path = unique_test_path("other_b").replace("test/", "test/other/");
 
-    agent_workspace::commands::write::run(&docs_path, None, "agent", "", "a", &backend)
+    agent_workspace::commands::write::run(&docs_path, None, "agent", "", "a", &backend, IoOptions::default())
         .unwrap();
-    agent_workspace::commands::write::run(&other_path, None, "agent", "", "b", &backend)
+    agent_workspace::commands::write::run(&other_path, None, "agent", "", "b", &backend, IoOptions::default())
         .unwrap();
 
     let report = backend.list(Some("test/docs")).unwrap();

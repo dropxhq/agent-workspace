@@ -115,6 +115,7 @@ mod tests {
                 workspace_dir: dir.path().to_path_buf(),
                 metadata_suffix: ".meta.yaml".to_string(),
             },
+            hooks: None,
         }
     }
 

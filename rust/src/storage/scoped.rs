@@ -1,6 +1,7 @@
 use crate::storage::mysql::MySqlBackend;
 use crate::storage::{ListReport, WorkspaceBackend};
 use crate::ranges::LineRange;
+use crate::config::IoOptions;
 use crate::error::WsResult;
 use crate::scoping::SessionScope;
 
@@ -33,8 +34,10 @@ impl WorkspaceBackend for ScopedMySqlBackend {
         &self,
         path: &str,
         ranges: Option<&[crate::ranges::LineRange]>,
+        opts: IoOptions,
     ) -> WsResult<String> {
-        self.inner.read(&self.scope.storage_path(path), ranges)
+        self.inner
+            .read(&self.scope.storage_path(path), ranges, opts)
     }
 
     fn write(
@@ -44,15 +47,16 @@ impl WorkspaceBackend for ScopedMySqlBackend {
         content: &str,
         created_by: &str,
         desc: &str,
+        opts: IoOptions,
     ) -> WsResult<()> {
-        self.inner
-            .write(
-                &self.scope.storage_path(path),
-                ranges,
-                content,
-                created_by,
-                desc,
-            )
+        self.inner.write(
+            &self.scope.storage_path(path),
+            ranges,
+            content,
+            created_by,
+            desc,
+            opts,
+        )
     }
 
     fn list(&self, scope: Option<&str>) -> WsResult<ListReport> {

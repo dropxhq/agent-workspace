@@ -14,7 +14,7 @@ use pyo3::exceptions::PyException;
 use pyo3::prelude::*;
 
 use crate::commands;
-use crate::config::Config;
+use crate::config::{Config, IoOptions};
 use crate::error::WsError;
 use crate::ranges::parse_ranges;
 use crate::scoping::SessionScope;
@@ -173,10 +173,17 @@ impl Workspace {
 
     /// Read a file. `ranges` is an optional 1-indexed, comma-separated spec
     /// (e.g. `"1-10,20-30"`); when given, only those lines are returned.
-    #[pyo3(signature = (path, ranges=None))]
-    fn read(&self, py: Python<'_>, path: &str, ranges: Option<&str>) -> PyResult<String> {
+    #[pyo3(signature = (path, ranges=None, *, skip_hooks=false))]
+    fn read(
+        &self,
+        py: Python<'_>,
+        path: &str,
+        ranges: Option<&str>,
+        skip_hooks: bool,
+    ) -> PyResult<String> {
         let parsed = ranges.map(parse_ranges).transpose().map_err(to_pyerr)?;
-        py.detach(|| self.backend.read(path, parsed.as_deref()))
+        let opts = IoOptions { skip_hooks };
+        py.detach(|| self.backend.read(path, parsed.as_deref(), opts))
             .map_err(to_pyerr)
     }
 
@@ -184,7 +191,7 @@ impl Workspace {
     ///
     /// With `ranges` (a single `"START-END"`), replaces those lines instead of
     /// overwriting the whole file. `created_by`/`desc` are stored in metadata.
-    #[pyo3(signature = (path, content, *, created_by, desc, ranges=None))]
+    #[pyo3(signature = (path, content, *, created_by, desc, ranges=None, skip_hooks=false))]
     fn write(
         &self,
         py: Python<'_>,
@@ -193,6 +200,7 @@ impl Workspace {
         created_by: &str,
         desc: &str,
         ranges: Option<&str>,
+        skip_hooks: bool,
     ) -> PyResult<()> {
         let parsed_range = match ranges {
             Some(raw) => {
@@ -207,9 +215,10 @@ impl Workspace {
             None => None,
         };
 
+        let opts = IoOptions { skip_hooks };
         py.detach(|| {
             self.backend
-                .write(path, parsed_range.as_ref(), content, created_by, desc)
+                .write(path, parsed_range.as_ref(), content, created_by, desc, opts)
         })
         .map_err(to_pyerr)
     }
