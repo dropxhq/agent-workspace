@@ -6,6 +6,8 @@ pub mod lock;
 pub mod mcp;
 pub mod metadata;
 pub mod paths;
+#[cfg(feature = "python")]
+mod python;
 pub mod ranges;
 pub mod scoping;
 pub mod storage;

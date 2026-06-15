@@ -4,29 +4,31 @@ version = "0.1.0"
 edition = "2021"
 description = "Restricted file-operation CLI for AI agents within a configured workspace"
 license = "Apache-2.0"
-readme = "README.md"
+readme = "../README.md"
 repository = "https://github.com/dropxhq/agent-workspace"
 keywords = ["agent", "workspace", "cli", "mcp"]
 categories = ["command-line-utilities"]
 exclude = [
-    ".agents/",
-    ".github/",
-    "config.yaml",
-    "data/",
-    "docs/",
-    "openspec/",
+    "../.agents/",
+    "../.github/",
+    "../config.yaml",
+    "../data/",
+    "../docs/",
+    "../openspec/",
+    "../python/",
 ]
 
 [lib]
 name = "agent_workspace"
 path = "src/lib.rs"
+# rlib: 供 `ws` 二进制使用；cdylib: 供 PyO3 Python 扩展使用
+crate-type = ["rlib", "cdylib"]
 
 [[bin]]
 name = "ws"
 path = "src/main.rs"
 
 [dependencies]
-anyhow = "1"
 chrono = { version = "0.4", features = ["serde"] }
 clap = { version = "4", features = ["derive"] }
 fs4 = { version = "0.8", features = ["sync"] }
@@ -38,6 +40,16 @@ sqlx = { version = "0.8", features = ["runtime-tokio", "mysql", "chrono"] }
 thiserror = "2"
 tokio = { version = "1", features = ["rt-multi-thread"] }
 walkdir = "2"
+
+# 可选：仅在构建 Python 扩展（--features python）时启用，普通 `cargo build` 不引入。
+[dependencies.pyo3]
+version = "0.22"
+features = ["extension-module", "abi3-py39"]
+optional = true
+
+[features]
+# 启用后将 lib 暴露为 Python 扩展模块（由 maturin 使用）。
+python = ["dep:pyo3"]
 
 [dev-dependencies]
 tempfile = "3"

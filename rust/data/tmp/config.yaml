@@ -1,0 +1,4 @@
+backend:
+  type: file
+  workspace_dir: ./data
+  metadata_suffix: ".meta.yaml"

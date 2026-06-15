@@ -64,9 +64,12 @@ jobs:
 
       - uses: Swatinem/rust-cache@v2
         if: steps.tag_check.outputs.skip != 'true' && steps.commits_check.outputs.skip != 'true'
+        with:
+          workspaces: rust
 
       - name: Test
         if: steps.tag_check.outputs.skip != 'true' && steps.commits_check.outputs.skip != 'true'
+        working-directory: rust
         run: cargo test --locked
 
       - name: Create and push release tag

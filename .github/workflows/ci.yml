@@ -19,9 +19,13 @@ jobs:
           components: clippy
 
       - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rust
 
       - name: Clippy
+        working-directory: rust
         run: cargo clippy --all-targets --locked
 
       - name: Test
+        working-directory: rust
         run: cargo test --locked

@@ -17,13 +17,13 @@
 
 ```bash
 # 克隆或进入项目目录后
-cargo build --release
+cd rust && cargo build --release
 
 # 安装到 ~/.cargo/bin
-cargo install --path .
+cargo install --path rust
 ```
 
-构建产物位于 `target/release/ws`。安装后可直接在终端运行 `ws`。
+构建产物位于 `rust/target/release/ws`。安装后可直接在终端运行 `ws`。
 
 ## 初始化
 
@@ -289,46 +289,64 @@ sha256: "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
 ## 开发
 
 ```bash
+cd rust
 cargo test          # 单元测试 + 集成测试（不含需 MySQL 的 ignored 测试）
 cargo run -- list   # 开发模式运行
 ```
 
+Python 绑定（在 `python/` 目录）：
+
+```bash
+cd python
+uv sync
+uv run maturin develop
+```
+
 ### 项目结构
 
-源码按**领域/特性**组织，每个概念对应一个清晰位置：
+仓库按语言拆分，Rust 核心与 Python 绑定分目录维护：
 
 ```
-src/
-├── main.rs       仅 fn main()，调用 cli::run()
-├── lib.rs        模块声明
-├── error.rs      错误类型与退出码
-├── lock.rs       file 后端的 advisory 文件锁
-├── cli.rs        Cli/Commands 定义、命令分发、按作用域打开后端
-├── scoping.rs    SessionScope（user/session 作用域解析）
-├── ranges.rs     行区间解析、写入替换、过滤
-├── metadata.rs   FileMetadata、sidecar 读写、SHA256/时间戳
-├── paths/        路径领域
-│   ├── normalize.rs     工作区相对路径归一化
-│   ├── resolve.rs       路径解析与越界校验
-│   ├── metadata_name.rs sidecar 命名与识别
-│   └── scope_prefix.rs  list 作用域前缀匹配
-├── config/       配置领域
-│   ├── mod.rs       Config / BackendConfig
-│   ├── raw.rs       反序列化 DTO 与默认值
-│   ├── load.rs      配置发现、加载、校验
-│   └── templates.rs init 写出的配置模板
-├── storage/      存储领域
-│   ├── mod.rs       WorkspaceBackend trait + ListReport
-│   ├── handle.rs    BackendHandle 枚举与工厂
-│   ├── file.rs      file 后端
-│   ├── scoped.rs    带作用域的 mysql 后端包装
-│   └── mysql/       mysql 后端（connection 连接层 + mod CRUD 实现）
-├── mcp/          本地 MCP 服务
-│   ├── mod.rs       模块入口
-│   ├── protocol.rs  JSON-RPC 2.0 消息类型与错误码
-│   ├── server.rs    stdio 同步循环与方法分发
-│   └── tools.rs     工具定义与执行（映射到 WorkspaceBackend）
-└── commands/     各子命令实现（init/read/write/list/remove）
+rust/               Rust crate（CLI、库、MCP、PyO3 绑定）
+├── src/
+│   ├── main.rs       仅 fn main()，调用 cli::run()
+│   ├── lib.rs        模块声明
+│   ├── error.rs      错误类型与退出码
+│   ├── lock.rs       file 后端的 advisory 文件锁
+│   ├── cli.rs        Cli/Commands 定义、命令分发、按作用域打开后端
+│   ├── scoping.rs    SessionScope（user/session 作用域解析）
+│   ├── ranges.rs     行区间解析、写入替换、过滤
+│   ├── metadata.rs   FileMetadata、sidecar 读写、SHA256/时间戳
+│   ├── paths/        路径领域
+│   │   ├── normalize.rs     工作区相对路径归一化
+│   │   ├── resolve.rs       路径解析与越界校验
+│   │   ├── metadata_name.rs sidecar 命名与识别
+│   │   └── scope_prefix.rs  list 作用域前缀匹配
+│   ├── config/       配置领域
+│   │   ├── mod.rs       Config / BackendConfig
+│   │   ├── raw.rs       反序列化 DTO 与默认值
+│   │   ├── load.rs      配置发现、加载、校验
+│   │   └── templates.rs init 写出的配置模板
+│   ├── storage/      存储领域
+│   │   ├── mod.rs       WorkspaceBackend trait + ListReport
+│   │   ├── handle.rs    BackendHandle 枚举与工厂
+│   │   ├── file.rs      file 后端
+│   │   ├── scoped.rs    带作用域的 mysql 后端包装
+│   │   └── mysql/       mysql 后端（connection 连接层 + mod CRUD 实现）
+│   ├── mcp/          本地 MCP 服务
+│   │   ├── mod.rs       模块入口
+│   │   ├── protocol.rs  JSON-RPC 2.0 消息类型与错误码
+│   │   ├── server.rs    stdio 同步循环与方法分发
+│   │   └── tools.rs     工具定义与执行（映射到 WorkspaceBackend）
+│   └── commands/     各子命令实现（init/read/write/list/remove）
+└── tests/            集成测试
+
+python/             Python 包与构建配置
+├── pyproject.toml     maturin/uv（`manifest-path` → ../rust/）
+├── uv.lock            uv 依赖锁（可选）
+└── agent_workspace/
+    ├── __init__.py      公开 API 重导出
+    └── py.typed         PEP 561 类型标记
 ```
 
 ### MySQL 集成测试（可选）
@@ -337,7 +355,7 @@ src/
 
 ```bash
 export MYSQL_TEST_URL='mysql://user:pass@localhost:3306/agent_workspace_test'
-cargo test --test mysql_integration -- --ignored
+cd rust && cargo test --test mysql_integration -- --ignored
 ```
 
 未设置 `MYSQL_TEST_URL` 时，`cargo test` 会跳过这些测试，不影响常规 CI。

@@ -1,0 +1,34 @@
+[build-system]
+requires = ["maturin>=1.7,<2"]
+build-backend = "maturin"
+
+[project]
+name = "agent-workspace"
+description = "Restricted file-operation workspace for AI agents (Python bindings over the Rust core)"
+license = { text = "Apache-2.0" }
+requires-python = ">=3.9"
+keywords = ["agent", "workspace", "mcp", "filesystem"]
+classifiers = [
+    "Programming Language :: Rust",
+    "Programming Language :: Python :: Implementation :: CPython",
+    "Programming Language :: Python :: Implementation :: PyPy",
+]
+# Version is sourced from ../rust/Cargo.toml by maturin.
+dynamic = ["version"]
+
+[project.urls]
+Repository = "https://github.com/dropxhq/agent-workspace"
+
+[tool.maturin]
+manifest-path = "../rust/Cargo.toml"
+# Build the PyO3 extension; the `python` cargo feature gates all binding code.
+features = ["python"]
+bindings = "pyo3"
+# Native module lives inside the Python package as `_agent_workspace`.
+module-name = "agent_workspace._agent_workspace"
+# Pure-Python sources (this directory).
+python-source = "."
+# Produce version-agnostic abi3 wheels (matches the abi3-py39 cargo feature).
+
+[dependency-groups]
+dev = ["maturin>=1.7,<2"]

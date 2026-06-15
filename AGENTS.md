@@ -7,15 +7,44 @@ Agent Workspace (`ws`) — 基于 Rust 的受限文件操作 CLI，供 Agent 在
 ## 构建与测试
 
 ```bash
-cargo build                 # 构建（release: cargo build --release，产物 target/release/ws）
+just pack-rust          # release 构建 ws 二进制 → rust/target/release/ws
+just pack-python        # maturin 构建 wheel → rust/target/wheels/
+just pack               # 以上两者
+just develop-python     # 可编辑安装到 python/.venv（开发迭代）
+```
+
+也可直接使用 cargo / uv（见下方）。Rust 命令在 `rust/` 下执行，Python 在 `python/` 下执行。
+
+```bash
+cargo build                 # 在 rust/ 下构建（release: cargo build --release，产物 rust/target/release/ws）
 cargo test                  # 单元 + 集成测试（mysql 测试默认 ignored）
 cargo clippy --all-targets  # lint
 cargo run -- <cmd>          # 开发模式运行，如 cargo run -- list
 ```
 
+以上命令均在 `rust/` 目录下执行。也可在仓库根目录使用 `cargo -C rust <cmd>`。
+
+Python 绑定在 `python/` 目录构建：
+
+```bash
+cd python
+uv sync                  # 创建 .venv 并安装可编辑包
+uv run maturin develop   # 重新编译 native 扩展（开发迭代）
+uv run maturin build --release
+```
+
 MySQL 集成测试需 `MYSQL_TEST_URL` 环境变量并运行 `cargo test --test mysql_integration -- --ignored`；未设置时自动跳过。
 
-## 架构（源码按领域/特性组织）
+## 仓库布局
+
+| 目录 | 语言 | 说明 |
+|------|------|------|
+| `rust/` | Rust | CLI（`ws`）、核心库、MCP 服务、PyO3 绑定源码 |
+| `python/` | Python | `agent-workspace` 包、`pyproject.toml` / `uv.lock`、maturin 构建的 native 扩展 |
+
+Python 构建在 `python/` 目录执行（`uv sync`、`maturin develop`）；`manifest-path` 指向 `../rust/Cargo.toml`。
+
+## 架构（`rust/src/` 按领域/特性组织）
 
 | 模块 | 职责 |
 |------|------|
@@ -46,5 +75,5 @@ MySQL 集成测试需 `MYSQL_TEST_URL` 环境变量并运行 `cargo test --test 
 ## 修改注意事项
 
 - 改动 CLI 参数、配置格式、退出码或存储 schema 属于对外行为变更，需谨慎并同步更新 `README.md`。
-- 测试就近放置：每个模块的 `#[cfg(test)] mod tests` 与其代码同文件；跨后端行为在 `tests/integration.rs` / `tests/mysql_integration.rs`。
+- 测试就近放置：每个模块的 `#[cfg(test)] mod tests` 与其代码同文件；跨后端行为在 `rust/tests/integration.rs` / `rust/tests/mysql_integration.rs`。
 - 本项目使用 `openspec` 管理变更，提案/规格位于 `openspec/`。
