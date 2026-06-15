@@ -1,0 +1,82 @@
+name: Daily Release
+
+permissions:
+  contents: write
+
+on:
+  schedule:
+    # 每天 23:00（Asia/Shanghai）检查是否发布
+    - cron: '0 15 * * *'
+  workflow_dispatch:
+
+jobs:
+  maybe-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: main
+
+      - name: Resolve today's release tag
+        id: meta
+        env:
+          TZ: Asia/Shanghai
+        run: |
+          set -euo pipefail
+          tag="$(date +'%Y.%-m.%-d')"
+          since="$(date +'%Y-%m-%d 00:00:00 %z')"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "since=$since" >> "$GITHUB_OUTPUT"
+          echo "Today's tag: $tag"
+
+      - name: Skip when today's release already exists
+        id: tag_check
+        env:
+          TAG: ${{ steps.meta.outputs.tag }}
+        run: |
+          set -euo pipefail
+          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "Tag $TAG already exists on remote, skipping"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Skip when there are no commits today
+        if: steps.tag_check.outputs.skip != 'true'
+        id: commits_check
+        env:
+          SINCE: ${{ steps.meta.outputs.since }}
+        run: |
+          set -euo pipefail
+          count="$(git rev-list --count HEAD --since="$SINCE")"
+          echo "Commits since $SINCE: $count"
+          if [ "$count" -eq 0 ]; then
+            echo "No commits today, skipping release"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: dtolnay/rust-toolchain@stable
+        if: steps.tag_check.outputs.skip != 'true' && steps.commits_check.outputs.skip != 'true'
+
+      - uses: Swatinem/rust-cache@v2
+        if: steps.tag_check.outputs.skip != 'true' && steps.commits_check.outputs.skip != 'true'
+
+      - name: Test
+        if: steps.tag_check.outputs.skip != 'true' && steps.commits_check.outputs.skip != 'true'
+        run: cargo test --locked
+
+      - name: Create and push release tag
+        if: steps.tag_check.outputs.skip != 'true' && steps.commits_check.outputs.skip != 'true'
+        env:
+          TAG: ${{ steps.meta.outputs.tag }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "$TAG"
+          git push origin "refs/tags/$TAG"
+          echo "Pushed tag $TAG; Release workflow will publish artifacts and crates.io"

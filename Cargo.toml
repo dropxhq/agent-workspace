@@ -2,6 +2,20 @@
 name = "agent-workspace"
 version = "0.1.0"
 edition = "2021"
+description = "Restricted file-operation CLI for AI agents within a configured workspace"
+license = "Apache-2.0"
+readme = "README.md"
+repository = "https://github.com/dropxhq/agent-workspace"
+keywords = ["agent", "workspace", "cli", "mcp"]
+categories = ["command-line-utilities"]
+exclude = [
+    ".agents/",
+    ".github/",
+    "config.yaml",
+    "data/",
+    "docs/",
+    "openspec/",
+]
 
 [lib]
 name = "agent_workspace"

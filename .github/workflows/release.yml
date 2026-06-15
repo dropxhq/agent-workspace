@@ -1,0 +1,114 @@
+name: Release
+
+permissions:
+  contents: write
+
+on:
+  push:
+    tags:
+      - '[0-9][0-9][0-9][0-9].[0-9]*.[0-9]*'
+      - '[0-9][0-9][0-9][0-9].[0-9]*.[0-9]*-*'
+
+env:
+  TAG: ${{ github.ref_name }}
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    outputs:
+      ok: ${{ steps.check.outputs.ok }}
+    steps:
+      - id: check
+        run: |
+          if [[ "${{ github.ref_name }}" =~ ^[0-9]{4}\.[0-9]{1,2}\.[0-9]{1,2}(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Tag '${{ github.ref_name }}' does not match CalVer format YYYY.M.D; skipping release"
+          fi
+
+  test:
+    needs: validate
+    if: needs.validate.outputs.ok == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - run: cargo test --locked
+
+  create-release:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create or refresh GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG exists; removing old assets for re-upload"
+            gh release view "$TAG" --json assets -q '.assets[].name' \
+              | while read -r asset; do
+                  gh release delete-asset "$TAG" "$asset" --yes
+                done
+          else
+            gh release create "$TAG" --title "$TAG" --generate-notes
+          fi
+
+  upload-assets:
+    needs: create-release
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+          - target: universal-apple-darwin
+            os: macos-latest
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: taiki-e/upload-rust-binary-action@v1
+        with:
+          bin: ws
+          target: ${{ matrix.target }}
+          locked: true
+          checksum: sha256
+          tar: unix
+          zip: windows
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+  publish-crates:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Sync version from tag
+        run: sed -i 's/^version = .*/version = "'"$TAG"'"/' Cargo.toml
+
+      - name: Publish to crates.io
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+        run: |
+          set -euo pipefail
+          if curl -sf "https://crates.io/api/v1/crates/agent-workspace/$TAG" >/dev/null; then
+            echo "::warning::Version $TAG is already on crates.io; skipping publish (crates.io does not allow overwriting published versions)"
+            exit 0
+          fi
+          cargo publish --locked --allow-dirty --token "$CARGO_REGISTRY_TOKEN"
