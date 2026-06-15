@@ -1,12 +1,19 @@
 use std::io::{self, Write};
 
+use crate::config::IoOptions;
 use crate::storage::{BackendHandle, WorkspaceBackend};
 use crate::ranges::{line_in_ranges, parse_ranges};
 use crate::error::{WsError, WsResult};
 
-pub fn run(path: &str, ranges: Option<&str>, human: bool, backend: &BackendHandle) -> WsResult<()> {
+pub fn run(
+    path: &str,
+    ranges: Option<&str>,
+    human: bool,
+    backend: &BackendHandle,
+    opts: IoOptions,
+) -> WsResult<()> {
     let parsed_ranges = ranges.map(parse_ranges).transpose()?;
-    let content = backend.read(path, parsed_ranges.as_deref())?;
+    let content = backend.read(path, parsed_ranges.as_deref(), opts)?;
 
     if human {
         print_human(path, &content, parsed_ranges.as_deref())?;

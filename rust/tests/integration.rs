@@ -2,7 +2,7 @@ use std::fs;
 
 use tempfile::TempDir;
 
-use agent_workspace::config::Config;
+use agent_workspace::config::{Config, IoOptions};
 use agent_workspace::paths::{normalize_workspace_relative, parse_ws_path_in};
 use agent_workspace::scoping::SessionScope;
 use agent_workspace::storage::{
@@ -34,6 +34,7 @@ fn write_read_remove_lifecycle() {
         "test file",
         "hello\nworld\n",
         &backend,
+        IoOptions::default(),
     )
     .unwrap();
 
@@ -41,7 +42,7 @@ fn write_read_remove_lifecycle() {
     assert!(data_path.is_file());
     assert!(workspace_dir.join("docs/foo.txt.meta.yaml").is_file());
 
-    agent_workspace::commands::read::run("docs/foo.txt", None, false, &backend).unwrap();
+    agent_workspace::commands::read::run("docs/foo.txt", None, false, &backend, IoOptions::default()).unwrap();
 
     agent_workspace::commands::list::run(None, false, &backend).unwrap();
 
@@ -61,6 +62,7 @@ fn write_with_ranges_partial_replace() {
         "",
         "a\nb\nc\n",
         &backend,
+        IoOptions::default(),
     )
     .unwrap();
 
@@ -71,6 +73,7 @@ fn write_with_ranges_partial_replace() {
         "",
         "B\n",
         &backend,
+        IoOptions::default(),
     )
     .unwrap();
 
@@ -90,7 +93,7 @@ fn metadata_path_hidden_from_read_and_remove() {
     .unwrap();
 
     let err =
-        agent_workspace::commands::read::run(meta_relative, None, false, &backend).unwrap_err();
+        agent_workspace::commands::read::run(meta_relative, None, false, &backend, IoOptions::default()).unwrap_err();
     assert!(matches!(err, agent_workspace::error::WsError::NotFound(_)));
 
     let err = agent_workspace::commands::remove::run(meta_relative, &backend).unwrap_err();
@@ -150,6 +153,7 @@ fn metadata_preserves_created_fields_on_update() {
         "first",
         "v1\n",
         &backend,
+        IoOptions::default(),
     )
     .unwrap();
 
@@ -167,6 +171,7 @@ fn metadata_preserves_created_fields_on_update() {
         "second",
         "v2\n",
         &backend,
+        IoOptions::default(),
     )
     .unwrap();
 
@@ -184,7 +189,7 @@ fn metadata_preserves_created_fields_on_update() {
 fn list_json_output() {
     let (_tmp, _workspace_dir, backend) = setup_workspace();
 
-    agent_workspace::commands::write::run("a.txt", None, "agent", "", "x", &backend).unwrap();
+    agent_workspace::commands::write::run("a.txt", None, "agent", "", "x", &backend, IoOptions::default()).unwrap();
 
     agent_workspace::commands::list::run(None, true, &backend).unwrap();
 }
@@ -193,9 +198,9 @@ fn list_json_output() {
 fn list_subdirectory_scope() {
     let (_tmp, _workspace_dir, backend) = setup_workspace();
 
-    agent_workspace::commands::write::run("docs/a.txt", None, "agent", "", "a", &backend)
+    agent_workspace::commands::write::run("docs/a.txt", None, "agent", "", "a", &backend, IoOptions::default())
         .unwrap();
-    agent_workspace::commands::write::run("other/b.txt", None, "agent", "", "b", &backend)
+    agent_workspace::commands::write::run("other/b.txt", None, "agent", "", "b", &backend, IoOptions::default())
         .unwrap();
 
     let report = backend.list(Some("docs")).unwrap();
@@ -219,10 +224,11 @@ fn read_with_ranges() {
         "",
         "one\ntwo\nthree\nfour\n",
         &backend,
+        IoOptions::default(),
     )
     .unwrap();
 
-    agent_workspace::commands::read::run("lines.txt", Some("2-3"), false, &backend).unwrap();
+    agent_workspace::commands::read::run("lines.txt", Some("2-3"), false, &backend, IoOptions::default()).unwrap();
 }
 
 #[test]
@@ -244,6 +250,7 @@ fn concurrent_writes_do_not_corrupt() {
                     "",
                     &format!("iteration {i}\n"),
                     &backend,
+                    IoOptions::default(),
                 )
                 .unwrap();
             })
@@ -290,6 +297,7 @@ fn session_scope_isolates_files_under_user_and_session() {
             workspace_dir: workspace_dir.clone(),
             metadata_suffix: ".meta.yaml".to_string(),
         },
+        hooks: None,
     };
 
     let scoped = open_scoped_backend(
@@ -305,6 +313,7 @@ fn session_scope_isolates_files_under_user_and_session() {
         "scoped",
         "scoped content\n",
         &scoped,
+        IoOptions::default(),
     )
     .unwrap();
 
@@ -315,10 +324,10 @@ fn session_scope_isolates_files_under_user_and_session() {
         .is_file());
 
     let unscoped = open_scoped_backend(&config, SessionScope::default()).unwrap();
-    let err = agent_workspace::commands::read::run("docs/foo.txt", None, false, &unscoped);
+    let err = agent_workspace::commands::read::run("docs/foo.txt", None, false, &unscoped, IoOptions::default());
     assert!(err.is_err());
 
-    agent_workspace::commands::read::run("docs/foo.txt", None, false, &scoped).unwrap();
+    agent_workspace::commands::read::run("docs/foo.txt", None, false, &scoped, IoOptions::default()).unwrap();
 
     let list = scoped.list(None).unwrap();
     assert_eq!(list.file_count, 1);
@@ -335,6 +344,7 @@ fn user_only_scope_isolates_files_under_user_directory() {
             workspace_dir: workspace_dir.clone(),
             metadata_suffix: ".meta.yaml".to_string(),
         },
+        hooks: None,
     };
 
     let user_scoped = open_scoped_backend(
@@ -350,6 +360,7 @@ fn user_only_scope_isolates_files_under_user_directory() {
         "",
         "root\n",
         &user_scoped,
+        IoOptions::default(),
     )
     .unwrap();
 
@@ -367,6 +378,7 @@ fn session_only_scope_falls_back_to_workspace_root() {
             workspace_dir: workspace_dir.clone(),
             metadata_suffix: ".meta.yaml".to_string(),
         },
+        hooks: None,
     };
 
     let session_only = open_scoped_backend(
@@ -382,6 +394,7 @@ fn session_only_scope_falls_back_to_workspace_root() {
         "",
         "root\n",
         &session_only,
+        IoOptions::default(),
     )
     .unwrap();
 

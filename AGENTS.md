@@ -55,7 +55,8 @@ Python 构建在 `python/` 目录执行（`uv sync`、`maturin develop`）；`ma
 | `metadata.rs` | `FileMetadata`、sidecar 读写、SHA256/时间戳 |
 | `paths/` | 路径领域：`normalize` 归一化 / `resolve` 解析与越界校验 / `metadata_name` sidecar 命名 / `scope_prefix` 作用域前缀 |
 | `config/` | 配置领域：`mod`(模型) / `raw`(DTO+默认值) / `load`(发现/加载/校验) / `templates`(init 模板) |
-| `storage/` | 存储领域：`mod`(`WorkspaceBackend` trait + `ListReport`) / `handle`(`BackendHandle` 枚举+工厂) / `file` / `scoped` / `mysql/`(`connection` 连接层 + `mod` CRUD) |
+| `hooks/` | 外部命令 hook 执行（stdin/stdout 协议、超时） |
+| `storage/` | 存储领域：`mod`(`WorkspaceBackend` trait + `ListReport`) / `handle`(`BackendHandle` 枚举+工厂) / `hooked`(装饰器) / `file` / `scoped` / `mysql/` |
 | `mcp/` | 本地 MCP 服务：`protocol`(JSON-RPC 2.0 类型/错误码) / `server`(stdio 同步循环与方法分发) / `tools`(工具定义与执行，直接调用 `WorkspaceBackend`) |
 | `error.rs` | `WsError` 错误类型与退出码映射 |
 | `lock.rs` | file 后端的进程级 advisory 文件锁 |
@@ -69,7 +70,8 @@ Python 构建在 `python/` 目录执行（`uv sync`、`maturin develop`）；`ma
 - **错误与退出码**：错误统一返回 `WsResult<T>`（`error.rs`）。退出码：`2` 路径非法/越界、`3` 未找到、`4` 锁冲突、`1` 其他。新增错误场景请复用已有 `WsError` 变体以保持退出码语义。
 - **双后端一致性**：`file` 与 `mysql` 后端均实现 `WorkspaceBackend` trait，行为应保持一致（含锁冲突返回码 4）。改动 trait 时同步更新所有实现与 `BackendHandle` 转发。
 - **并发**：file 后端写操作在独占文件锁下同时更新数据与 sidecar；mysql 写/删在事务内 `SELECT ... FOR UPDATE`。
-- **配置格式**：使用 `backend:` 块（`type: file|mysql`）。顶层 `workspace_dir`/`metadata_suffix` 为已移除的旧格式，勿恢复。
+- **配置格式**：使用 `backend:` 块（`type: file|mysql`）；可选顶层 `hooks:`（read/write 外部命令）。顶层 `workspace_dir`/`metadata_suffix` 为已移除的旧格式，勿恢复。
+- **内容 Hook**：`HookedBackend` 在 `open_scoped_backend` 时包装；read hook 在区间过滤前，write hook 在区间合并后；`IoOptions.skip_hooks`（CLI `--no-hooks`）按次绕过。`list`/`remove` 不经 hook。
 - **MCP stdout 纯净**：`ws mcp` 用 stdout 作 JSON-RPC 传输通道。工具实现必须直接调用 `WorkspaceBackend` trait 方法，**不得**复用 `commands::*::run`（它们会 `print!` 到 stdout 污染协议）。循环保持同步：mysql 后端内部自带 tokio runtime 并 `block_on`，在 runtime 内再跑会 panic。工具执行失败按 MCP 约定返回 `isError: true` 结果，仅调用格式非法才返回 JSON-RPC 协议错误。
 
 ## 修改注意事项

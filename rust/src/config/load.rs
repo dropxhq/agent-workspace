@@ -2,50 +2,101 @@ use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use crate::config::raw::{RawBackend, RawBackendInner, RawFileBackend, RawMysqlBackend};
-use crate::config::{BackendConfig, Config};
+use crate::config::raw::{
+    RawBackend, RawBackendInner, RawConfig, RawFileBackend, RawHookCommand, RawHooks,
+    RawMysqlBackend, DEFAULT_HOOK_TIMEOUT_MS,
+};
+use crate::config::{BackendConfig, Config, HookCommand, HookConfig};
 use crate::error::{WsError, WsResult};
 
-impl Config {
-    pub fn load() -> WsResult<Self> {
-        let config_path = resolve_config_path()?;
-        Self::load_from_path(&config_path)
+pub fn load() -> WsResult<Config> {
+    let config_path = resolve_config_path()?;
+    load_from_path(&config_path)
+}
+
+pub fn load_from_path(config_path: &Path) -> WsResult<Config> {
+    let contents = fs::read_to_string(config_path).map_err(|e| {
+        WsError::Other(format!(
+            "failed to read config {}: {e}",
+            config_path.display()
+        ))
+    })?;
+
+    let raw: RawConfig = serde_yaml::from_str(&contents).map_err(|e| {
+        WsError::Other(format!(
+            "failed to parse config {}: {e}",
+            config_path.display()
+        ))
+    })?;
+
+    let config_dir = config_path
+        .parent()
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| PathBuf::from("."));
+
+    let backend = match raw.backend {
+        RawBackend::Wrapped { backend } => match backend {
+            RawBackendInner::File(f) => parse_file_backend(f, &config_dir, config_path)?,
+            RawBackendInner::Mysql(m) => parse_mysql_backend(m)?,
+        },
+        RawBackend::File(f) => parse_file_backend(f, &config_dir, config_path)?,
+        RawBackend::Mysql(m) => parse_mysql_backend(m)?,
+    };
+
+    let hooks = raw.hooks.map(parse_hooks).transpose()?;
+
+    Ok(Config {
+        config_path: config_path.to_path_buf(),
+        backend,
+        hooks,
+    })
+}
+
+fn parse_hooks(raw: RawHooks) -> WsResult<HookConfig> {
+    let read = raw.read.map(|h| parse_hook_command(h, "hooks.read")).transpose()?;
+    let write = raw
+        .write
+        .map(|h| parse_hook_command(h, "hooks.write"))
+        .transpose()?;
+
+    if read.is_none() && write.is_none() {
+        return Err(WsError::Other(
+            "hooks block is present but neither hooks.read nor hooks.write is configured".to_string(),
+        ));
     }
 
-    pub fn load_from_path(config_path: &Path) -> WsResult<Self> {
-        let contents = fs::read_to_string(config_path).map_err(|e| {
-            WsError::Other(format!(
-                "failed to read config {}: {e}",
-                config_path.display()
-            ))
-        })?;
-
-        let raw: RawBackend = serde_yaml::from_str(&contents).map_err(|e| {
-            WsError::Other(format!(
-                "failed to parse config {}: {e}",
-                config_path.display()
-            ))
-        })?;
-
-        let config_dir = config_path
-            .parent()
-            .map(Path::to_path_buf)
-            .unwrap_or_else(|| PathBuf::from("."));
-
-        let backend = match raw {
-            RawBackend::Wrapped { backend } => match backend {
-                RawBackendInner::File(f) => parse_file_backend(f, &config_dir, config_path)?,
-                RawBackendInner::Mysql(m) => parse_mysql_backend(m)?,
-            },
-            RawBackend::File(f) => parse_file_backend(f, &config_dir, config_path)?,
-            RawBackend::Mysql(m) => parse_mysql_backend(m)?,
-        };
-
-        Ok(Config {
-            config_path: config_path.to_path_buf(),
-            backend,
-        })
+    if read.is_none() {
+        eprintln!(
+            "warning: hooks.read is not configured; read operations will see physical content while writes may be transformed"
+        );
     }
+    if write.is_none() {
+        eprintln!(
+            "warning: hooks.write is not configured; write operations will store logical content while reads may be transformed"
+        );
+    }
+
+    Ok(HookConfig { read, write })
+}
+
+fn parse_hook_command(raw: RawHookCommand, label: &str) -> WsResult<HookCommand> {
+    if raw.command.is_empty() {
+        return Err(WsError::Other(format!(
+            "{label}.command must be a non-empty argv array"
+        )));
+    }
+
+    let timeout_ms = raw.timeout_ms.unwrap_or(DEFAULT_HOOK_TIMEOUT_MS);
+    if timeout_ms == 0 {
+        return Err(WsError::Other(format!(
+            "{label}.timeout_ms must be greater than 0"
+        )));
+    }
+
+    Ok(HookCommand {
+        command: raw.command,
+        timeout_ms,
+    })
 }
 
 fn parse_file_backend(
@@ -162,7 +213,34 @@ backend:
 "#,
         )
         .unwrap();
-        let config = Config::load_from_path(&cfg_path).unwrap();
+        let config = load_from_path(&cfg_path).unwrap();
         assert!(matches!(config.backend, BackendConfig::File { .. }));
+        assert!(config.hooks.is_none());
+    }
+
+    #[test]
+    fn parses_hooks_config() {
+        let tmp = TempDir::new().unwrap();
+        let data = tmp.path().join("data");
+        fs::create_dir_all(&data).unwrap();
+        let cfg_path = tmp.path().join("config.yaml");
+        fs::write(
+            &cfg_path,
+            r#"
+backend:
+  type: file
+  workspace_dir: ./data
+hooks:
+  read:
+    command: ["cat"]
+  write:
+    command: ["cat"]
+"#,
+        )
+        .unwrap();
+        let config = load_from_path(&cfg_path).unwrap();
+        let hooks = config.hooks.expect("hooks");
+        assert!(hooks.read.is_some());
+        assert!(hooks.write.is_some());
     }
 }

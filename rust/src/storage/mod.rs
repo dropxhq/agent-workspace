@@ -1,9 +1,11 @@
+use crate::config::IoOptions;
 use crate::error::WsResult;
 use crate::metadata::FileMetadata;
 use crate::ranges::LineRange;
 
 pub mod file;
 pub mod handle;
+pub mod hooked;
 pub mod mysql;
 pub mod scoped;
 
@@ -21,7 +23,12 @@ pub struct ListReport {
 }
 
 pub trait WorkspaceBackend {
-    fn read(&self, path: &str, ranges: Option<&[LineRange]>) -> WsResult<String>;
+    fn read(
+        &self,
+        path: &str,
+        ranges: Option<&[LineRange]>,
+        opts: IoOptions,
+    ) -> WsResult<String>;
 
     fn write(
         &self,
@@ -30,6 +37,7 @@ pub trait WorkspaceBackend {
         content: &str,
         created_by: &str,
         desc: &str,
+        opts: IoOptions,
     ) -> WsResult<()>;
 
     fn list(&self, scope: Option<&str>) -> WsResult<ListReport>;
