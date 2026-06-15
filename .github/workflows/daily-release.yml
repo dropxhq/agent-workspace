@@ -18,28 +18,30 @@ jobs:
           fetch-depth: 0
           ref: main
 
-      - name: Resolve today's release tag
+      - name: Resolve today's release base tag
         id: meta
         env:
           TZ: Asia/Shanghai
         run: |
           set -euo pipefail
-          tag="$(date +'%Y.%-m.%-d')"
+          base="$(date +'%Y.%-m.%-d')"
           since="$(date +'%Y-%m-%d 00:00:00 %z')"
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "base=$base" >> "$GITHUB_OUTPUT"
           echo "since=$since" >> "$GITHUB_OUTPUT"
-          echo "Today's tag: $tag"
+          echo "Today's base tag: $base"
 
-      - name: Skip when today's release already exists
+      - name: Skip when today's formal release already exists
         id: tag_check
         env:
-          TAG: ${{ steps.meta.outputs.tag }}
+          BASE: ${{ steps.meta.outputs.base }}
         run: |
           set -euo pipefail
-          if git ls-remote --exit-code --tags origin "refs/tags/$TAG" >/dev/null 2>&1; then
-            echo "Tag $TAG already exists on remote, skipping"
+          # 预览版 tag（如 2026.6.15a6）不计入；仅正式 CalVer tag（如 2026.6.15）会阻止再次发布。
+          if git ls-remote --exit-code --tags origin "refs/tags/$BASE" >/dev/null 2>&1; then
+            echo "Formal tag $BASE already exists on remote, skipping"
             echo "skip=true" >> "$GITHUB_OUTPUT"
           else
+            echo "No formal tag for $BASE (preview tags ignored)"
             echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
 
@@ -72,14 +74,39 @@ jobs:
         working-directory: rust
         run: cargo test --locked
 
+      - name: Resolve next preview tag
+        if: steps.tag_check.outputs.skip != 'true' && steps.commits_check.outputs.skip != 'true'
+        id: preview
+        env:
+          BASE: ${{ steps.meta.outputs.base }}
+        run: |
+          set -euo pipefail
+          base_re="${BASE//./\\.}"
+          highest=0
+          while IFS=$'\t' read -r _ ref; do
+            [[ -z "$ref" ]] && continue
+            tag="${ref#refs/tags/}"
+            if [[ "$tag" =~ ^${base_re}a([0-9]+)$ ]]; then
+              n="${BASH_REMATCH[1]}"
+              if (( n > highest )); then
+                highest=$n
+              fi
+            fi
+          done < <(git ls-remote --tags origin "refs/tags/${BASE}a*" || true)
+
+          next=$((highest + 1))
+          tag="${BASE}a${next}"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "Next preview tag: $tag (latest existing: ${BASE}a${highest})"
+
       - name: Create and push release tag
         if: steps.tag_check.outputs.skip != 'true' && steps.commits_check.outputs.skip != 'true'
         env:
-          TAG: ${{ steps.meta.outputs.tag }}
+          TAG: ${{ steps.preview.outputs.tag }}
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git tag "$TAG"
           git push origin "refs/tags/$TAG"
-          echo "Pushed tag $TAG; Release workflow will publish CLI binaries, crates.io, and PyPI"
+          echo "Pushed preview tag $TAG; Release workflow will publish CLI binaries, crates.io, and PyPI"
