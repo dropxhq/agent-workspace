@@ -13,7 +13,7 @@ classifiers = [
     "Programming Language :: Python :: Implementation :: CPython",
     "Programming Language :: Python :: Implementation :: PyPy",
 ]
-# Version is sourced from ../rust/Cargo.toml by maturin.
+# Version/readme are sourced from ../rust/Cargo.toml by maturin (readme path must stay in Cargo.toml).
 dynamic = ["version", "readme"]
 
 [project.urls]
