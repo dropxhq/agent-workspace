@@ -85,7 +85,7 @@ jobs:
 
       - uses: taiki-e/upload-rust-binary-action@v1
         with:
-          root: rust
+          manifest-path: rust/Cargo.toml
           bin: ws
           target: ${{ matrix.target }}
           locked: true
@@ -215,6 +215,7 @@ jobs:
       - name: Upload Python packages to GitHub Release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
           shopt -s nullglob
