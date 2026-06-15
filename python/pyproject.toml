@@ -14,7 +14,7 @@ classifiers = [
     "Programming Language :: Python :: Implementation :: PyPy",
 ]
 # Version is sourced from ../rust/Cargo.toml by maturin.
-dynamic = ["version"]
+dynamic = ["version", "readme"]
 
 [project.urls]
 Repository = "https://github.com/dropxhq/agent-workspace"
