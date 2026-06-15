@@ -82,4 +82,4 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git tag "$TAG"
           git push origin "refs/tags/$TAG"
-          echo "Pushed tag $TAG; Release workflow will publish artifacts and crates.io"
+          echo "Pushed tag $TAG; Release workflow will publish CLI binaries, crates.io, and PyPI"

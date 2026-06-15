@@ -119,3 +119,142 @@ jobs:
             exit 0
           fi
           cargo publish --locked --allow-dirty --token "$CARGO_REGISTRY_TOKEN"
+
+  build-python-wheels:
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            target: x86_64
+            artifact: python-wheels-linux-x86_64
+          - os: ubuntu-latest
+            target: aarch64
+            artifact: python-wheels-linux-aarch64
+          - os: macos-latest
+            target: aarch64
+            artifact: python-wheels-macos-aarch64
+          - os: macos-15-intel
+            target: x86_64
+            artifact: python-wheels-macos-x86_64
+          - os: windows-latest
+            target: x64
+            artifact: python-wheels-windows-x64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Sync version from tag
+        shell: bash
+        run: |
+          python - <<'PY'
+          import os, pathlib, re
+          tag = os.environ["TAG"]
+          path = pathlib.Path("rust/Cargo.toml")
+          path.write_text(
+              re.sub(r'^version = .*', f'version = "{tag}"', path.read_text(), count=1, flags=re.M)
+          )
+          PY
+
+      - name: Build wheel
+        uses: PyO3/maturin-action@v1
+        with:
+          working-directory: python
+          target: ${{ matrix.target }}
+          manylinux: auto
+          args: --release --locked --out dist --compatibility pypi
+
+      - name: Upload wheel artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: python/dist/*.whl
+          if-no-files-found: error
+
+  build-python-sdist:
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Sync version from tag
+        run: sed -i 's/^version = .*/version = "'"$TAG"'"/' rust/Cargo.toml
+
+      - name: Build sdist
+        uses: PyO3/maturin-action@v1
+        with:
+          working-directory: python
+          command: sdist
+          args: --out dist
+
+      - name: Upload sdist artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: python-sdist
+          path: python/dist/*.tar.gz
+          if-no-files-found: error
+
+  upload-python-wheels:
+    needs: [create-release, build-python-wheels, build-python-sdist]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: python-wheels-*
+          merge-multiple: true
+          path: dist
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: python-sdist
+          path: dist
+
+      - name: Upload Python packages to GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          files=(dist/*)
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "No Python packages found in dist/"
+            exit 1
+          fi
+          gh release upload "$TAG" dist/* --clobber
+
+  publish-pypi:
+    needs: [build-python-wheels, build-python-sdist]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: python-wheels-*
+          merge-multiple: true
+          path: dist
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: python-sdist
+          path: dist
+
+      - uses: astral-sh/setup-uv@v5
+
+      - name: Publish to PyPI
+        env:
+          UV_PUBLISH_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+        run: |
+          set -euo pipefail
+          if curl -sf "https://pypi.org/pypi/agent-workspace/$TAG/json" >/dev/null; then
+            echo "::warning::Version $TAG is already on PyPI; skipping publish (PyPI does not allow overwriting published versions)"
+            exit 0
+          fi
+          uv publish dist/*
