@@ -1,14 +1,2 @@
-/target/
-/rust/target/
-/data/*
-!/data/.gitkeep
-.worktrees/
-
-# Python / maturin / uv (under python/)
-python/.venv/
-python/dist/
-python/**/*.egg-info/
-.venv/
-__pycache__/
-*.so
-*.pyd
+.worktrees
+.idea

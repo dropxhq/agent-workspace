@@ -1,0 +1,7 @@
+# Python / maturin / uv (under python/)
+.venv
+dist
+**/*.egg-info
+__pycache__/
+*.so
+*.pyd
