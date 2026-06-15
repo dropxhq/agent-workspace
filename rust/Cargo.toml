@@ -43,7 +43,7 @@ walkdir = "2"
 
 # 可选：仅在构建 Python 扩展（--features python）时启用，普通 `cargo build` 不引入。
 [dependencies.pyo3]
-version = "0.22"
+version = "0.29"
 features = ["extension-module", "abi3-py39"]
 optional = true
 

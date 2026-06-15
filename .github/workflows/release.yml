@@ -8,6 +8,7 @@ on:
     tags:
       - '[0-9][0-9][0-9][0-9].[0-9]*.[0-9]*'
       - '[0-9][0-9][0-9][0-9].[0-9]*.[0-9]*-*'
+      - '[0-9][0-9][0-9][0-9].[0-9]*.[0-9]*[a-z][0-9A-Za-z.-]*'
 
 env:
   TAG: ${{ github.ref_name }}
@@ -20,11 +21,11 @@ jobs:
     steps:
       - id: check
         run: |
-          if [[ "${{ github.ref_name }}" =~ ^[0-9]{4}\.[0-9]{1,2}\.[0-9]{1,2}(-[0-9A-Za-z.-]+)?$ ]]; then
+          if [[ "${{ github.ref_name }}" =~ ^[0-9]{4}\.[0-9]{1,2}\.[0-9]{1,2}([a-z][0-9A-Za-z.-]*|-[0-9A-Za-z.-]+)?$ ]]; then
             echo "ok=true" >> "$GITHUB_OUTPUT"
           else
             echo "ok=false" >> "$GITHUB_OUTPUT"
-            echo "::warning::Tag '${{ github.ref_name }}' does not match CalVer format YYYY.M.D; skipping release"
+            echo "::warning::Tag '${{ github.ref_name }}' does not match CalVer format YYYY.M.D[.suffix]; skipping release"
           fi
 
   test:
@@ -106,16 +107,18 @@ jobs:
           workspaces: rust
 
       - name: Sync version from tag
+        id: version
         run: .github/scripts/sync-rust-version.sh "$TAG"
 
       - name: Publish to crates.io
         working-directory: rust
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          CARGO_VERSION: ${{ steps.version.outputs.cargo_version }}
         run: |
           set -euo pipefail
-          if curl -sf "https://crates.io/api/v1/crates/agent-workspace/$TAG" >/dev/null; then
-            echo "::warning::Version $TAG is already on crates.io; skipping publish (crates.io does not allow overwriting published versions)"
+          if curl -sf "https://crates.io/api/v1/crates/agent-workspace/$CARGO_VERSION" >/dev/null; then
+            echo "::warning::Version $CARGO_VERSION is already on crates.io; skipping publish (crates.io does not allow overwriting published versions)"
             exit 0
           fi
           cargo publish --locked --allow-dirty
@@ -244,8 +247,9 @@ jobs:
           UV_PUBLISH_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
         run: |
           set -euo pipefail
-          if curl -sf "https://pypi.org/pypi/agent-workspace/$TAG/json" >/dev/null; then
-            echo "::warning::Version $TAG is already on PyPI; skipping publish (PyPI does not allow overwriting published versions)"
+          CARGO_VERSION="$(python3 -c 'import os,re; t=os.environ["TAG"]; m=re.fullmatch(r"(\d{4}\.\d{1,2}\.\d{1,2})([a-z][0-9A-Za-z.-]*)", t); print(f"{m.group(1)}-{m.group(2)}" if m else t)')"
+          if curl -sf "https://pypi.org/pypi/agent-workspace/$CARGO_VERSION/json" >/dev/null; then
+            echo "::warning::Version $CARGO_VERSION is already on PyPI; skipping publish (PyPI does not allow overwriting published versions)"
             exit 0
           fi
           uv publish dist/*

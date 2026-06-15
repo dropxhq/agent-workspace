@@ -48,7 +48,7 @@ fn to_pyerr(err: WsError) -> PyErr {
 // --- Result types --------------------------------------------------------
 
 /// Metadata for a single workspace file (mirrors the Rust `FileMetadata`).
-#[pyclass(module = "agent_workspace", frozen)]
+#[pyclass(module = "agent_workspace", frozen, skip_from_py_object)]
 #[derive(Clone)]
 pub struct FileMeta {
     #[pyo3(get)]
@@ -80,7 +80,7 @@ impl FileMeta {
 }
 
 /// Result of [`Workspace.list`].
-#[pyclass(module = "agent_workspace", frozen)]
+#[pyclass(module = "agent_workspace", frozen, skip_from_py_object)]
 pub struct ListReport {
     /// The scope prefix this listing was restricted to, if any.
     #[pyo3(get)]
@@ -133,7 +133,7 @@ impl ListReport {
 ///
 /// The backend (file or mysql) is opened once from the config file and reused
 /// across calls. All paths are workspace-relative and cannot escape the root.
-#[pyclass(module = "agent_workspace")]
+#[pyclass(module = "agent_workspace", skip_from_py_object)]
 pub struct Workspace {
     backend: BackendHandle,
     #[pyo3(get)]
@@ -176,7 +176,7 @@ impl Workspace {
     #[pyo3(signature = (path, ranges=None))]
     fn read(&self, py: Python<'_>, path: &str, ranges: Option<&str>) -> PyResult<String> {
         let parsed = ranges.map(parse_ranges).transpose().map_err(to_pyerr)?;
-        py.allow_threads(|| self.backend.read(path, parsed.as_deref()))
+        py.detach(|| self.backend.read(path, parsed.as_deref()))
             .map_err(to_pyerr)
     }
 
@@ -207,7 +207,7 @@ impl Workspace {
             None => None,
         };
 
-        py.allow_threads(|| {
+        py.detach(|| {
             self.backend
                 .write(path, parsed_range.as_ref(), content, created_by, desc)
         })
@@ -218,14 +218,14 @@ impl Workspace {
     #[pyo3(signature = (scope=None))]
     fn list(&self, py: Python<'_>, scope: Option<&str>) -> PyResult<ListReport> {
         let report = py
-            .allow_threads(|| self.backend.list(scope))
+            .detach(|| self.backend.list(scope))
             .map_err(to_pyerr)?;
         Ok(ListReport::from(report))
     }
 
     /// Remove a file and its metadata.
     fn remove(&self, py: Python<'_>, path: &str) -> PyResult<()> {
-        py.allow_threads(|| self.backend.remove(path))
+        py.detach(|| self.backend.remove(path))
             .map_err(to_pyerr)
     }
 
@@ -256,12 +256,12 @@ fn _agent_workspace(m: &Bound<'_, PyModule>) -> PyResult<()> {
 
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
 
-    m.add("WorkspaceError", py.get_type_bound::<WorkspaceError>())?;
-    m.add("InvalidPathError", py.get_type_bound::<InvalidPathError>())?;
-    m.add("PathEscapeError", py.get_type_bound::<PathEscapeError>())?;
-    m.add("NotFoundError", py.get_type_bound::<NotFoundError>())?;
-    m.add("LockConflictError", py.get_type_bound::<LockConflictError>())?;
-    m.add("InvalidRangesError", py.get_type_bound::<InvalidRangesError>())?;
+    m.add("WorkspaceError", py.get_type::<WorkspaceError>())?;
+    m.add("InvalidPathError", py.get_type::<InvalidPathError>())?;
+    m.add("PathEscapeError", py.get_type::<PathEscapeError>())?;
+    m.add("NotFoundError", py.get_type::<NotFoundError>())?;
+    m.add("LockConflictError", py.get_type::<LockConflictError>())?;
+    m.add("InvalidRangesError", py.get_type::<InvalidRangesError>())?;
 
     Ok(())
 }
