@@ -1,4 +1,6 @@
-use clap::{Parser, Subcommand};
+use std::path::Path;
+
+use clap::{CommandFactory, Parser, Subcommand};
 
 use crate::storage::{open_scoped_backend, BackendHandle};
 use crate::commands;
@@ -9,11 +11,15 @@ use crate::scoping::SessionScope;
 #[derive(Parser)]
 #[command(
     name = "ws",
-    about = "Agent workspace file operations (restricted to configured workspace)"
+    about = "Agent workspace file operations (restricted to configured workspace)",
 )]
 struct Cli {
+    /// Path to config.yaml (defaults to AGENT_WORKSPACE_CONFIG or ./config.yaml in cwd)
+    #[arg(long, global = true)]
+    config: Option<String>,
+
     #[command(subcommand)]
-    command: Commands,
+    command: Option<Commands>,
 }
 
 #[derive(Subcommand)]
@@ -85,17 +91,38 @@ enum Commands {
         /// Workspace-relative path
         path: String,
     },
+    /// Run a local MCP server over stdio (exposes workspace ops as MCP tools)
+    Mcp,
 }
 
 pub fn run() -> Result<(), WsError> {
     let cli = Cli::parse();
 
-    match cli.command {
+    let Some(command) = cli.command else {
+        let mut cmd = Cli::command();
+        cmd.print_help()?;
+        println!();
+        return Ok(());
+    };
+
+    match command {
         Commands::Init { path, backend } => commands::init::run(path.as_deref(), &backend),
+        Commands::Mcp => {
+            let config = load_config(cli.config.as_deref())?;
+            crate::mcp::run(&config)?;
+            Ok(())
+        }
         command => {
-            let config = Config::load()?;
+            let config = load_config(cli.config.as_deref())?;
             dispatch(command, &config)
         }
+    }
+}
+
+fn load_config(config_path: Option<&str>) -> Result<Config, WsError> {
+    match config_path {
+        Some(path) => Config::load_from_path(Path::new(path)),
+        None => Config::load(),
     }
 }
 
@@ -144,6 +171,7 @@ fn dispatch(command: Commands, config: &Config) -> Result<(), WsError> {
             let backend = open_scoped_backend(config, SessionScope::default())?;
             commands::remove::run(&path, &backend)?
         }
+        Commands::Mcp => unreachable!(),
     }
 
     Ok(())

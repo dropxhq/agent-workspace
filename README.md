@@ -9,6 +9,7 @@
 - **元数据**：file 后端使用 `*.meta.yaml` sidecar；mysql 后端将元数据存入数据库
 - **并发安全**：file 后端使用 advisory 文件锁；mysql 后端使用 InnoDB 行锁
 - **按行操作**：支持按行区间读取或局部替换写入
+- **本地 MCP 服务**：`ws mcp` 通过 stdio 暴露 JSON-RPC（MCP 协议）工具，供 MCP 客户端调用工作区读写列删操作
 
 ## 安装
 
@@ -78,8 +79,13 @@ backend:
 
 ### 加载顺序
 
-1. 若设置了环境变量 `AGENT_WORKSPACE_CONFIG`，使用其指向的配置文件
-2. 否则读取**当前工作目录**下的 `config.yaml`
+除 `init` 外，其余命令均通过配置文件加载后端。可按以下优先级指定配置文件：
+
+1. 命令行 `--config /path/to/config.yaml`
+2. 环境变量 `AGENT_WORKSPACE_CONFIG`
+3. **当前工作目录**下的 `config.yaml`
+
+`init` 会生成新的 `config.yaml`，不使用上述加载逻辑；传入的 `--config` 对其无效。
 
 ## 路径规则
 
@@ -98,6 +104,15 @@ backend:
 元数据文件（如 `foo.txt.meta.yaml`）在 `read` / `remove` 中视为不存在，不会泄露其内容。
 
 ## 命令
+
+所有需加载配置的命令均支持全局 `--config` 选项，例如：
+
+```bash
+ws --config /path/to/config.yaml read docs/foo.txt
+ws read docs/foo.txt --config /path/to/config.yaml
+```
+
+两种写法等价；未指定时按上文「加载顺序」解析。
 
 ### `init` — 初始化工作区
 
@@ -169,6 +184,69 @@ ws remove docs/foo.txt
 ```
 
 同时删除数据文件及对应元数据 sidecar。
+
+### `mcp` — 本地 MCP 服务
+
+以 [Model Context Protocol](https://modelcontextprotocol.io/) 服务运行，通过 **stdio** 收发换行分隔的 JSON-RPC 2.0 消息。MCP 客户端将 `ws mcp` 作为子进程启动后，即可调用工作区工具。
+
+```bash
+ws mcp
+ws mcp --config /path/to/config.yaml
+```
+
+进程读取 stdin 直到 EOF，所有协议输出写入 stdout（因此该模式下命令本身不向 stdout 打印其他内容）。后端与作用域规则由配置文件决定。
+
+支持的方法：`initialize`、`tools/list`、`tools/call`、`ping`，以及忽略的 `notifications/*`。
+
+暴露的工具（每次调用可选 `user_id` / `session_id` 进行作用域隔离）：
+
+| 工具 | 必选参数 | 可选参数 | 说明 |
+|------|---------|---------|------|
+| `read` | `path` | `ranges` | 读取文件，可按 1-indexed 行区间过滤 |
+| `write` | `path`、`content`、`created_by`、`desc` | `ranges`（单个 `START-END`） | 写入或局部替换 |
+| `list` | — | `path` | 列出文件，返回 JSON 报告 |
+| `remove` | `path` | — | 删除文件及元数据 |
+
+工具**执行**失败（如路径越界、未找到）按 MCP 约定返回 `isError: true` 的结果而非 JSON-RPC 协议错误；仅调用格式本身非法（缺少工具名、未知工具）才返回协议错误。
+
+示例（手动喂入请求）：
+
+```bash
+printf '%s\n' \
+  '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05"}}' \
+  '{"jsonrpc":"2.0","id":2,"method":"tools/list"}' \
+  '{"jsonrpc":"2.0","id":3,"method":"tools/call","params":{"name":"write","arguments":{"path":"a.txt","content":"hello\n","created_by":"agent","desc":"demo"}}}' \
+  | ws mcp
+```
+
+在 MCP 客户端中的典型配置（以可执行路径启动）：
+
+```json
+{
+  "mcpServers": {
+    "agent-workspace": {
+      "command": "/path/to/ws",
+      "args": ["mcp", "--config", "/path/to/config.yaml"]
+    }
+  }
+}
+```
+
+也可通过环境变量 `AGENT_WORKSPACE_CONFIG` 指定配置（省略 `--config` 时生效）：
+
+```json
+{
+  "mcpServers": {
+    "agent-workspace": {
+      "command": "/path/to/ws",
+      "args": ["mcp"],
+      "env": { "AGENT_WORKSPACE_CONFIG": "/path/to/config.yaml" }
+    }
+  }
+}
+```
+
+> 启动目录、`--config` 或 `AGENT_WORKSPACE_CONFIG` 需指向有效的 `config.yaml`，否则服务无法加载后端。
 
 ## 元数据
 
@@ -245,6 +323,11 @@ src/
 │   ├── file.rs      file 后端
 │   ├── scoped.rs    带作用域的 mysql 后端包装
 │   └── mysql/       mysql 后端（connection 连接层 + mod CRUD 实现）
+├── mcp/          本地 MCP 服务
+│   ├── mod.rs       模块入口
+│   ├── protocol.rs  JSON-RPC 2.0 消息类型与错误码
+│   ├── server.rs    stdio 同步循环与方法分发
+│   └── tools.rs     工具定义与执行（映射到 WorkspaceBackend）
 └── commands/     各子命令实现（init/read/write/list/remove）
 ```
 

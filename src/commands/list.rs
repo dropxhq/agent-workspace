@@ -1,7 +1,9 @@
 pub use crate::storage::ListReport;
 
-use crate::storage::{BackendHandle, WorkspaceBackend};
+use chrono::{DateTime, FixedOffset, Local};
+
 use crate::error::{WsError, WsResult};
+use crate::storage::{BackendHandle, WorkspaceBackend};
 pub fn run(path: Option<&str>, json: bool, backend: &BackendHandle) -> WsResult<()> {
     let report = backend.list(path)?;
 
@@ -41,14 +43,20 @@ fn print_human(report: &ListReport) {
             "{:<40} {:<12} {:<20} {:<20} {:>10}",
             f.relative_path,
             truncate(&f.created_by, 12),
-            f.created_at.format("%Y-%m-%d %H:%M:%S"),
-            f.updated_at.format("%Y-%m-%d %H:%M:%S"),
+            format_local(&f.created_at),
+            format_local(&f.updated_at),
             f.size_bytes,
         );
         if !f.desc.is_empty() {
             println!("  desc: {}", f.desc);
         }
     }
+}
+
+fn format_local(dt: &DateTime<FixedOffset>) -> String {
+    dt.with_timezone(&Local)
+        .format("%Y-%m-%d %H:%M:%S")
+        .to_string()
 }
 
 fn truncate(s: &str, max: usize) -> String {
