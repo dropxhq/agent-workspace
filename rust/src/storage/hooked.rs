@@ -3,7 +3,6 @@ use std::path::PathBuf;
 use crate::config::{HookConfig, IoOptions};
 use crate::error::{WsError, WsResult};
 use crate::hooks::{run_hook, HookContext};
-use crate::metadata::FileMetadata;
 use crate::ranges::{apply_write_ranges, filter_lines, LineRange};
 use crate::storage::{BackendHandle, ListReport, WorkspaceBackend};
 
